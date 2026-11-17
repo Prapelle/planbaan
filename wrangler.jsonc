@@ -9,7 +9,7 @@
   // ฐานข้อมูลหลัก: เก็บตารางระบบ (projects, memberships ฯลฯ) และข้อมูลโครงการกลุ่มแรก
   // เมื่อต้องแบ่งฐานข้อมูล ให้เพิ่ม binding ใหม่ เช่น DB_2 แล้วตั้ง projects.shard = 'DB_2' ให้โครงการที่ย้าย
   "d1_databases": [
-    { "binding": "DB", "database_name": "planbaan-db", "database_id": "REPLACE_WITH_D1_ID", "migrations_dir": "migrations" }
+    { "binding": "DB", "database_name": "planbaan-db", "database_id": "d7ec0c2f-81c1-425a-833a-fcfcad2a0b05", "migrations_dir": "migrations" }
   ],
   // ที่เก็บไฟล์สำรองรายวัน (และรูปในระยะถัดไป)
   "r2_buckets": [{ "binding": "BACKUPS", "bucket_name": "planbaan-backups" }],
