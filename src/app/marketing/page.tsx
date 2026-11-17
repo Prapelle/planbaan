@@ -13,7 +13,7 @@ const here = (m: string) => `/marketing?month=${m}`;
 
 async function guard(month: string) {
   const ctx = await requireProject({ action: "edit", target: here(month) });
-  if (!canEditMarketing(ctx.role, ctx.access.supportCanEdit)) back(here(month), { error: "ไม่มีสิทธิ์แก้ข้อมูลการตลาด" });
+  if (!(canEditMarketing(ctx.role, ctx.access.supportCanEdit) && !ctx.readonly)) back(here(month), { error: "ไม่มีสิทธิ์แก้ข้อมูลการตลาด" });
   return ctx;
 }
 const monthOf = (f: FormData) => { const m = fv(f, "month"); return /^\d{4}-\d{2}$/.test(m) ? m : M.thisMonth(); };
@@ -90,7 +90,7 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
   await ctx.usage("page_view", { page: "marketing" });
   const sp = await searchParams;
   const month = sp.month && /^\d{4}-(0[1-9]|1[0-2])$/.test(sp.month) ? sp.month : M.thisMonth();
-  const canEdit = canEditMarketing(ctx.role, ctx.access.supportCanEdit);
+  const canEdit = (canEditMarketing(ctx.role, ctx.access.supportCanEdit) && !ctx.readonly);
   const r = await M.marketingReport(ctx.db, month);
   const tc = M.cost(r.total);
   const isCurrent = month === M.thisMonth();

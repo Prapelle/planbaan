@@ -10,7 +10,7 @@
 import { type D1Like, type D1Stmt, nowIso } from "./d1";
 
 export const TENANT_TABLES = {
-  plots: ["code", "zone", "house_type", "price", "house_status", "sale_status"],
+  plots: ["code", "zone", "house_type", "price", "house_status", "sale_status", "map_x", "map_y"],
   leads: ["name", "phone", "channel", "stage", "plot_code", "owner_email", "last_contact_at", "note", "next_follow_at",
     "loan_docs", "debt_reason", "debt_plan", "debt_retry_at", "debt_since", "max_stage"],
   lead_activity: ["lead_id", "kind", "from_stage", "to_stage", "note", "actor"],
@@ -51,7 +51,8 @@ export type BatchOp =
   | { kind: "insert"; table: TenantTable; data: Record<string, unknown>; id?: string }
   | { kind: "update"; table: TenantTable; id: string; patch: Record<string, unknown> };
 
-export type ListOpts = { where?: Record<string, string | number>; orderBy?: string; desc?: boolean; limit?: number; offset?: number };
+/** since/before: กรองช่วง created_at (ISO) */
+export type ListOpts = { where?: Record<string, string | number>; orderBy?: string; desc?: boolean; limit?: number; offset?: number; since?: string; before?: string };
 
 export function tenantDb(db: D1Like, projectId: string) {
   if (!projectId) throw new Error("ต้องระบุ projectId");
@@ -87,12 +88,15 @@ export function tenantDb(db: D1Like, projectId: string) {
       const where = opts.where ?? {};
       checkCols(t, Object.keys(where));
       const conds = ["project_id = ?", ...Object.keys(where).map((c) => `"${c}" = ?`)];
+      const args: unknown[] = [pid, ...Object.values(where)];
+      if (opts.since) { conds.push(`created_at >= ?`); args.push(opts.since); }
+      if (opts.before) { conds.push(`created_at < ?`); args.push(opts.before); }
       const order = opts.orderBy ?? "created_at";
       if (!ORDERABLE.has(order) && !(TENANT_TABLES[t] as readonly string[]).includes(order)) throw new Error(`เรียงตาม ${order} ไม่ได้`);
       const limit = Math.min(Math.max(1, Math.floor(opts.limit ?? 500)), 2000);
       const offset = Math.max(0, Math.floor(opts.offset ?? 0));
       const sql = `SELECT ${colList(t)} FROM "${t}" WHERE ${conds.join(" AND ")} ORDER BY "${order}" ${opts.desc ? "DESC" : "ASC"} LIMIT ${limit} OFFSET ${offset}`;
-      const r = await db.prepare(sql).bind(pid, ...Object.values(where)).all<Row>();
+      const r = await db.prepare(sql).bind(...args).all<Row>();
       return r.results;
     },
 
@@ -141,6 +145,13 @@ export function tenantDb(db: D1Like, projectId: string) {
       const t = checkTable(table);
       const r = await db.prepare(`DELETE FROM "${t}" WHERE id = ? AND project_id = ?`).bind(id, pid).run();
       return r.meta.changes > 0;
+    },
+
+    /** ลบหลายแถวในรอบเดียว (ใช้ตอนย้ายประวัติเก่าไปเก็บถาวร) */
+    async removeMany(table: TenantTable, ids: string[]): Promise<void> {
+      const t = checkTable(table);
+      const stmts = ids.map((id) => db.prepare(`DELETE FROM "${t}" WHERE id = ? AND project_id = ?`).bind(id, pid));
+      for (let i = 0; i < stmts.length; i += 50) await db.batch(stmts.slice(i, i + 50));
     },
 
     /** ส่งออกข้อมูลทั้งโครงการ (ลูกค้าส่งออกได้เสมอ) */

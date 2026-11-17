@@ -5,12 +5,16 @@ import { requireProject } from "@/lib/context";
 import { back, baht, errMsg, fv } from "@/lib/form";
 import { canManagePlots } from "@/lib/roles";
 import * as S from "@/lib/sales";
+import { PlanMap } from "@/components/PlanMap";
+import { controlDb } from "@/lib/d1";
+import { setPlanImage } from "@/lib/control";
+import { MAX_PLAN_BYTES, placePlot, planKey, sniffImage, unplacePlot } from "@/lib/planmap";
 
 export const dynamic = "force-dynamic";
 
 async function guardEdit() {
   const ctx = await requireProject({ action: "edit", target: "/plots" });
-  if (!canManagePlots(ctx.role, ctx.access.supportCanEdit)) back("/plots", { error: "ไม่มีสิทธิ์ตั้งค่าผังแปลง" });
+  if (!(canManagePlots(ctx.role, ctx.access.supportCanEdit) && !ctx.readonly)) back("/plots", { error: "ไม่มีสิทธิ์ตั้งค่าผังแปลง" });
   return ctx;
 }
 
@@ -47,11 +51,64 @@ async function deleteAction(f: FormData) {
   back("/plots", { msg: `ลบแปลง ${code} แล้ว` });
 }
 
-export default async function PlotsPage({ searchParams }: { searchParams: Promise<{ plot?: string; error?: string; msg?: string }> }) {
+const MAP = "/plots?view=map";
+
+async function uploadPlanAction(f: FormData) {
+  "use server";
+  const ctx = await guardEdit();
+  const file = f.get("file");
+  const bucket = ctx.env.BACKUPS;
+  if (!bucket) back(MAP, { error: "ยังไม่ได้เชื่อมที่เก็บไฟล์ (R2)" });
+  if (!(file instanceof File) || file.size === 0) back(MAP, { error: "เลือกรูปผังก่อน" });
+  if (file.size > MAX_PLAN_BYTES) back(MAP, { error: "รูปใหญ่เกิน 5MB ย่อรูปหรือบันทึกเป็น JPG ก่อน" });
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const kind = sniffImage(bytes);
+  if (!kind) back(MAP, { error: "รองรับเฉพาะรูป PNG JPG หรือ WEBP (ถ้าเป็น PDF ให้แคปหน้าจอเป็นรูปก่อน)" });
+  const key = planKey(ctx.project.id, kind.ext);
+  await bucket.put(key, bytes, { httpMetadata: { contentType: kind.mime } });
+  const old = ctx.project.plan_image;
+  await setPlanImage(controlDb(ctx.env), ctx.project.id, key);
+  if (old) await bucket.delete(old).catch(() => {});
+  revalidatePath("/plots");
+  back(MAP, { msg: "อัปโหลดรูปผังแล้ว กด \"วางจุดแปลงบนรูป\" แล้วแตะตำแหน่งของแต่ละแปลง" });
+}
+
+async function removePlanAction() {
+  "use server";
+  const ctx = await guardEdit();
+  const old = ctx.project.plan_image;
+  await setPlanImage(controlDb(ctx.env), ctx.project.id, "");
+  if (old) await ctx.env.BACKUPS?.delete(old).catch(() => {});
+  revalidatePath("/plots");
+  back("/plots", { msg: "ลบรูปผังแล้ว ตำแหน่งแปลงยังเก็บไว้ ถ้าอัปโหลดรูปเดิมใหม่จะกลับมาที่เดิม" });
+}
+
+async function placeAction(f: FormData) {
+  "use server";
+  const ctx = await guardEdit();
+  const code = fv(f, "code");
+  try { await placePlot(ctx.db, code, fv(f, "x"), fv(f, "y")); } catch (e) { back(MAP, { error: errMsg(e) }); }
+  revalidatePath("/plots");
+  back(MAP, { msg: `วางแปลง ${code.toUpperCase()} แล้ว` });
+}
+
+async function unplaceAction(f: FormData) {
+  "use server";
+  const ctx = await guardEdit();
+  const code = fv(f, "code");
+  try { await unplacePlot(ctx.db, code); } catch (e) { back(MAP, { error: errMsg(e) }); }
+  revalidatePath("/plots");
+  back(MAP, { msg: `เอาแปลง ${code.toUpperCase()} ออกจากรูปแล้ว`, extra: { plot: code } });
+}
+
+export default async function PlotsPage({ searchParams }: { searchParams: Promise<{ plot?: string; view?: string; error?: string; msg?: string }> }) {
   const ctx = await requireProject({ action: "view", target: "/plots" });
   await ctx.usage("page_view", { page: "plots" });
-  const { plot: selCode, error, msg } = await searchParams;
-  const canEdit = canManagePlots(ctx.role, ctx.access.supportCanEdit);
+  const { plot: selCode, view, error, msg } = await searchParams;
+  const hasImage = !!ctx.project.plan_image;
+  const mapView = view === "map";
+  const base = mapView ? MAP : "/plots";
+  const canEdit = (canManagePlots(ctx.role, ctx.access.supportCanEdit) && !ctx.readonly);
   const [plots, leads] = await Promise.all([ctx.db.list("plots", { limit: 2000 }), ctx.db.list("leads", { limit: 2000 })]);
   plots.sort(S.byCode);
   const zones = [...new Set(plots.map((p) => String(p.zone)))];
@@ -65,6 +122,11 @@ export default async function PlotsPage({ searchParams }: { searchParams: Promis
       <p className="mb-4 text-sm text-slate-600">สีบอกสถานะขาย ซึ่งเปลี่ยนเองตามขั้นของลูกค้าที่ผูกกับแปลง กดที่แปลงเพื่อดูรายละเอียด</p>
       <Notice error={error} msg={msg} />
 
+      <div role="tablist" aria-label="รูปแบบผัง" className="mb-3 flex gap-2 text-sm">
+        <Link role="tab" aria-selected={!mapView} href="/plots" className={`flex min-h-11 items-center rounded-md px-4 font-semibold ${!mapView ? "bg-slate-900 text-white" : "border border-slate-300 bg-white"}`}>แบบตาราง</Link>
+        <Link role="tab" aria-selected={mapView} href={MAP} className={`flex min-h-11 items-center rounded-md px-4 font-semibold ${mapView ? "bg-slate-900 text-white" : "border border-slate-300 bg-white"}`}>แบบรูปผัง</Link>
+      </div>
+
       <div className="mb-4 flex flex-wrap gap-2 text-sm">
         {S.SALE_STATUS.map((s) => (
           <span key={s} className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1">
@@ -77,12 +139,19 @@ export default async function PlotsPage({ searchParams }: { searchParams: Promis
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
         <div className="min-w-0 flex-[2] rounded-lg border border-slate-200 bg-white p-4">
           {plots.length === 0 && <p className="text-slate-600">ยังไม่มีแปลง {canEdit ? "เพิ่มแปลงจากกล่องด้านล่าง" : "ให้เจ้าของโครงการหรือผู้จัดการเพิ่มแปลง"}</p>}
-          {zones.map((z) => (
+          {mapView && hasImage && (
+            <PlanMap src="/api/plan-image" imgVersion={String(ctx.project.plan_image).slice(-12)} canEdit={canEdit} placeAction={canEdit ? placeAction : undefined} selected={sel ? String(sel.code) : undefined}
+              colors={SALE_COLOR} plots={plots.map((p) => ({ code: String(p.code), x: p.map_x === null || p.map_x === undefined ? null : Number(p.map_x), y: p.map_y === null || p.map_y === undefined ? null : Number(p.map_y), status: String(p.sale_status), label: S.SALE_LABEL[p.sale_status as S.SaleStatus] }))} />
+          )}
+          {mapView && !hasImage && (
+            <p className="text-slate-700">ยังไม่มีรูปผัง {canEdit ? "อัปโหลดรูปผังจากกล่องด้านล่าง" : "ให้เจ้าของโครงการหรือผู้จัดการอัปโหลดรูปผัง"} · ระหว่างนี้ใช้แบบตารางได้ตามปกติ</p>
+          )}
+          {!mapView && zones.map((z) => (
             <section key={z} className="mb-4">
               <h2 className="mb-2 text-sm font-semibold text-slate-600">โซน {z}</h2>
               <div className="grid grid-cols-4 gap-2 sm:grid-cols-6 xl:grid-cols-8">
                 {plots.filter((p) => p.zone === z).map((p) => (
-                  <Link key={p.id} href={`/plots?plot=${p.code}`} aria-label={`แปลง ${p.code} ${S.SALE_LABEL[p.sale_status as S.SaleStatus]}`}
+                  <Link key={p.id} href={`${base}${base.includes("?") ? "&" : "?"}plot=${p.code}`} aria-label={`แปลง ${p.code} ${S.SALE_LABEL[p.sale_status as S.SaleStatus]}`}
                     className={`flex min-h-14 flex-col items-center justify-center rounded-md border text-sm font-semibold ${SALE_COLOR[String(p.sale_status)]} ${sel?.id === p.id ? "ring-4 ring-brand-500 ring-offset-1" : ""}`}>
                     {String(p.code)}
                     <span className="text-[11px] font-medium">{S.SALE_LABEL[p.sale_status as S.SaleStatus]}</span>
@@ -97,7 +166,7 @@ export default async function PlotsPage({ searchParams }: { searchParams: Promis
           <aside className="flex-1 rounded-lg border border-slate-200 bg-white p-4">
             <div className="mb-3 flex items-baseline justify-between">
               <h2 className="text-xl font-bold">แปลง {String(sel.code)}</h2>
-              <Link href="/plots" className="text-sm text-brand-700 underline">ปิด</Link>
+              <Link href={base} className="text-sm text-brand-700 underline">ปิด</Link>
             </div>
             <dl className="mb-4 grid grid-cols-2 gap-y-1 text-sm">
               <dt className="text-slate-600">แบบบ้าน</dt><dd className="font-medium">{String(sel.house_type) || "-"}</dd>
@@ -131,6 +200,12 @@ export default async function PlotsPage({ searchParams }: { searchParams: Promis
                   )}
                   <button className="min-h-11 rounded-md bg-brand-600 px-4 font-semibold text-white">บันทึก</button>
                 </form>
+                {mapView && hasImage && sel.map_x !== null && sel.map_x !== undefined && (
+                  <form action={unplaceAction} className="mt-2">
+                    <input type="hidden" name="code" value={String(sel.code)} />
+                    <button className="min-h-11 w-full rounded-md border border-slate-400 px-4 text-sm font-medium">เอาจุดแปลงนี้ออกจากรูป</button>
+                  </form>
+                )}
                 {selLeads.length === 0 && (
                   <form action={deleteAction} className="mt-2">
                     <input type="hidden" name="code" value={String(sel.code)} />
@@ -143,7 +218,20 @@ export default async function PlotsPage({ searchParams }: { searchParams: Promis
         )}
       </div>
 
-      {canEdit && (
+      {canEdit && mapView && (
+        <div className="mt-6 flex flex-wrap items-end gap-3 rounded-lg border border-slate-200 bg-white p-4 text-sm">
+          <form action={uploadPlanAction} className="flex flex-wrap items-end gap-3">
+            <label className="flex flex-col gap-1 font-semibold">{hasImage ? "เปลี่ยนรูปผัง" : "อัปโหลดรูปผัง"} (PNG JPG WEBP ไม่เกิน 5MB)
+              <input type="file" name="file" accept="image/png,image/jpeg,image/webp" required className="min-h-11 py-2 font-normal" />
+            </label>
+            <button className="min-h-11 rounded-md bg-brand-600 px-4 font-semibold text-white">อัปโหลด</button>
+          </form>
+          {hasImage && <form action={removePlanAction}><button className="min-h-11 rounded-md border border-red-300 px-4 font-medium text-red-700">ลบรูปผัง</button></form>}
+          <p className="w-full text-xs text-slate-600">เปลี่ยนรูปใหม่ที่สัดส่วนเดิม จุดแปลงยังอยู่ที่เดิม ถ้าสัดส่วนเปลี่ยน ให้วางจุดใหม่</p>
+        </div>
+      )}
+
+      {canEdit && !mapView && (
         <form action={bulkAction} className="mt-6 grid grid-cols-2 gap-3 rounded-lg border border-slate-200 bg-white p-4 text-sm sm:grid-cols-3 lg:grid-cols-6">
           <div className="col-span-full font-semibold">เพิ่มแปลงทีละโซน</div>
           <label className="flex flex-col gap-1">โซน<input name="zone" required maxLength={4} placeholder="A" className="min-h-11 rounded-md border border-slate-300 px-3 uppercase" /></label>

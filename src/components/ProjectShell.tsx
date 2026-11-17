@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { signOut } from "@/auth";
 import type { ProjectCtx } from "@/lib/context";
+import { SOURCE_LABEL } from "@/lib/entitlement";
 import { ROLE_LABEL, canExport, canGrantSupport, canManageMembers } from "@/lib/roles";
 
 export function ProjectShell({ ctx, active, children }: { ctx: ProjectCtx; active: string; children: React.ReactNode }) {
@@ -10,6 +11,7 @@ export function ProjectShell({ ctx, active, children }: { ctx: ProjectCtx; activ
     { href: "/leads", label: "ลูกค้า", show: true },
     { href: "/loans", label: "สินเชื่อ", show: true },
     { href: "/marketing", label: "การตลาด", show: true },
+    { href: "/team", label: "ผลงานรายคน", show: true },
     { href: "/export", label: "ส่งออกข้อมูล", show: canExport(ctx.role) },
     { href: "/members", label: "ผู้ใช้ในโครงการ", show: canManageMembers(ctx.role) },
     { href: "/support", label: "สิทธิ์ทีมช่วยเหลือ", show: canGrantSupport(ctx.role) },
@@ -22,6 +24,7 @@ export function ProjectShell({ ctx, active, children }: { ctx: ProjectCtx; activ
           {new Date(ctx.access.grantExpiresAt ?? "").toLocaleString("th-TH")} · ทุกการเข้าถึงถูกบันทึกให้ลูกค้าเห็น
         </div>
       )}
+      <EntBanner ctx={ctx} />
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3">
         <div>
           <div className="text-xs font-semibold tracking-wide text-slate-500">PlanBaan</div>
@@ -62,3 +65,25 @@ export const SALE_COLOR: Record<string, string> = {
   transferred: "bg-slate-900 text-white border-slate-900",
   rent: "bg-violet-700 text-white border-violet-800",
 };
+
+const thDay = (d: string) => (d ? new Date(`${d}T00:00:00Z`).toLocaleDateString("th-TH", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" }) : "");
+
+/** แถบเตือนสิทธิ์ใช้งาน: เห็นเฉพาะเจ้าของ/ผู้จัดการ ยกเว้นโหมดดูอย่างเดียวที่ทุกคนต้องรู้ */
+function EntBanner({ ctx }: { ctx: ProjectCtx }) {
+  const e = ctx.ent;
+  const boss = ctx.role === "owner" || ctx.role === "manager";
+  if (e.state === "readonly")
+    return <div role="alert" className="bg-red-700 px-4 py-2 text-sm text-white">
+      โครงการอยู่ในโหมดดูอย่างเดียว ดูและส่งออกข้อมูลได้ แต่แก้ไขไม่ได้ ข้อมูลทั้งหมดยังอยู่ครบ{boss ? " · ติดต่อทีม PlanBaan เพื่อต่อสิทธิ์" : " · แจ้งเจ้าของโครงการ"}
+    </div>;
+  if (!boss) return null;
+  if (e.state === "grace")
+    return <div role="alert" className="bg-red-50 px-4 py-2 text-sm font-medium text-red-800">
+      สิทธิ์ใช้งาน ({SOURCE_LABEL[e.source]}) หมดเมื่อ {thDay(e.until)} ยังใช้งานได้ถึง {thDay(e.readonlyFrom)} หลังจากนั้นจะเป็นโหมดดูอย่างเดียว
+    </div>;
+  if (e.state === "expiring")
+    return <div role="status" className="bg-amber-100 px-4 py-2 text-sm text-amber-900">
+      สิทธิ์ใช้งาน ({SOURCE_LABEL[e.source]}) ถึง {thDay(e.until)} อีก {e.daysLeft} วัน · ใช้ฟรีต่อเมื่อยอดซื้อ Pure Product ถึงขั้นต่ำ
+    </div>;
+  return null;
+}

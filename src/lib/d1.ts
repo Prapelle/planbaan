@@ -11,11 +11,12 @@ export type D1Stmt = {
 };
 export type D1Like = { prepare(sql: string): D1Stmt; batch(s: D1Stmt[]): Promise<{ meta: D1Meta }[]> };
 
-export type R2ObjectLike = { key: string; uploaded?: Date };
+export type R2ObjectLike = { key: string; uploaded?: Date; size?: number };
 export type R2Like = {
   put(key: string, value: ArrayBuffer | Uint8Array | string, opts?: unknown): Promise<unknown>;
   list(opts?: { prefix?: string; cursor?: string; delimiter?: string }): Promise<{ objects: R2ObjectLike[]; truncated: boolean; cursor?: string; delimitedPrefixes?: string[] }>;
   delete(keys: string | string[]): Promise<void>;
+  get?(key: string): Promise<{ body: ReadableStream; httpMetadata?: { contentType?: string }; size: number; arrayBuffer(): Promise<ArrayBuffer> } | null>;
 };
 
 export type WorkerEnv = Record<string, unknown> & { DB: D1Like; BACKUPS?: R2Like };

@@ -40,6 +40,10 @@ export function makeR2() {
     put: async (key, value) => { store.set(key, typeof value === "string" ? new TextEncoder().encode(value) : new Uint8Array(value)); },
     list: async ({ prefix = "" } = {}) => ({ objects: [...store.keys()].filter((k) => k.startsWith(prefix)).sort().map((key) => ({ key })), truncated: false }),
     delete: async (keys) => { for (const k of [].concat(keys)) store.delete(k); },
+    get: async (key) => {
+      const v = store.get(key);
+      return v ? { size: v.length, body: new Blob([v]).stream(), arrayBuffer: async () => v.buffer.slice(v.byteOffset, v.byteOffset + v.length) } : null;
+    },
   };
 }
 

@@ -28,6 +28,11 @@
     "BASE_DOMAIN": "",
     // เปิดไว้ระหว่างยังไม่มีโดเมน: เลือกโครงการผ่าน /api/dev/project?slug=<slug> บนโดเมน workers.dev
     "ALLOW_PROJECT_SWITCH": "true",
-    "BACKUP_RETENTION_DAYS": "30"
+    "BACKUP_RETENTION_DAYS": "30",
+    // ประวัติลูกค้าเก่ากว่านี้ (วัน) ย้ายไปเก็บถาวรใน R2
+    "ARCHIVE_DAYS": "365",
+    // ช่วงทดลองของโครงการใหม่ (วัน) และยอดซื้อ Pure Product ขั้นต่ำรวม 3 เดือน (บาท) — ค่าชั่วคราว รอเจ้าของตัดสินใจ
+    "TRIAL_DAYS": "60",
+    "PURE_MIN_BAHT": "30000"
   }
 }

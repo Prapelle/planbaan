@@ -12,6 +12,7 @@ import { type Project, getProjectWithRole, getStaffRole } from "./control";
 import { type Access, resolveAccess } from "./access";
 import { resolveHost } from "./host";
 import { tenantDb } from "./tenant-db";
+import { type Entitlement, entitlementOf } from "./entitlement";
 import { type UsageEvent, logUsage } from "./usage";
 import type { AccessRole } from "./roles";
 
@@ -54,6 +55,10 @@ export type ProjectCtx = {
   env: WorkerEnv; project: Project; email: string; role: AccessRole;
   access: Extract<Access, { ok: true }>;
   db: ReturnType<typeof tenantDb>;
+  /** สิทธิ์ใช้งาน (ทดลอง / Pure Product / จ่ายเงิน) */
+  ent: Entitlement;
+  /** หมดสิทธิ์: ดูและส่งออกได้ แก้ไม่ได้ */
+  readonly: boolean;
   usage: (event: UsageEvent, meta?: Record<string, string | number>) => Promise<void>;
 };
 
@@ -76,6 +81,12 @@ export const requireProject = cache(async (opts: { action?: string; target?: str
     if (access.reason === "not_signed_in") redirect("/login");
     redirect(`/no-access?reason=${access.reason}`);
   }
+  const ent = entitlementOf(project);
+  // หมดสิทธิ์: กันทุกการแก้ไขที่นี่อีกชั้น (หน้าเว็บซ่อนปุ่มแก้อยู่แล้ว)
+  if (ent.readonly && opts.action === "edit") {
+    const to = opts.target?.startsWith("/") ? opts.target : "/";
+    redirect(`${to}${to.includes("?") ? "&" : "?"}error=${encodeURIComponent("โครงการอยู่ในโหมดดูอย่างเดียว แก้ไขข้อมูลไม่ได้ ติดต่อทีม PlanBaan เพื่อต่อสิทธิ์")}`);
+  }
   const db = tenantDb(shardDb(env, project.shard), project.id);
   const usage = async (event: UsageEvent, meta?: Record<string, string | number>) => {
     if (access.via === "support") return; // ไม่นับการใช้งานของทีมช่วยเหลือเป็นการใช้งานของลูกค้า
@@ -84,7 +95,7 @@ export const requireProject = cache(async (opts: { action?: string; target?: str
     await background(p);
   };
   console.log(`[timing] ${opts.target ?? ""} access ${Date.now() - t0}ms`);
-  return { env, project, email: email!, role: access.role, access, db, usage };
+  return { env, project, email: email!, role: access.role, access, db, ent, readonly: ent.readonly, usage };
 });
 
 /** ทำงานต่อหลังส่งหน้าเว็บให้ผู้ใช้แล้ว (Workers waitUntil) ถ้าไม่มีให้รอตามปกติ */

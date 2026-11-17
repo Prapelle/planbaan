@@ -5,8 +5,10 @@
 import { type D1Like, SHARD_OK, nowIso } from "./d1";
 import { isValidSlug } from "./host";
 import { type ProjectRole, normRole } from "./roles";
+import { trialEnd } from "./entitlement";
 
-export type Project = { id: string; slug: string; name: string; kind: string; province: string; shard: string; status: string; created_at: string };
+export type Project = { id: string; slug: string; name: string; kind: string; province: string; shard: string; status: string; created_at: string;
+  trial_ends_at?: string; pure_until?: string; paid_until?: string; plan_image?: string };
 export type SupportGrant = { id: string; project_id: string; granted_by: string; can_edit: number; reason: string; expires_at: string; revoked_at: string | null; created_at: string };
 
 const normEmail = (e: string) => e.trim().toLowerCase();
@@ -27,6 +29,11 @@ export async function getProjectWithRole(db: D1Like, slug: string, email: string
 export async function getProject(db: D1Like, id: string): Promise<Project | null> {
   return db.prepare(`SELECT * FROM projects WHERE id = ?`).bind(id).first<Project>();
 }
+/** key รูปผังใน R2 (ไฟล์อยู่ใต้ files/<project_id>/ เท่านั้น) */
+export async function setPlanImage(db: D1Like, projectId: string, key: string) {
+  if (key && !key.startsWith(`files/${projectId}/`)) throw new Error("key ไม่ถูกต้อง");
+  await db.prepare(`UPDATE projects SET plan_image = ? WHERE id = ?`).bind(key, projectId).run();
+}
 export async function listProjects(db: D1Like): Promise<Project[]> {
   return (await db.prepare(`SELECT * FROM projects ORDER BY created_at DESC`).all<Project>()).results;
 }
@@ -43,10 +50,10 @@ export async function createProject(db: D1Like, p: { slug: string; name: string;
   if (!SHARD_OK.test(shard)) throw new Error("ชื่อ shard ไม่ถูกต้อง");
   if (await getProjectBySlug(db, slug)) throw new Error(`มีโครงการ ${slug} อยู่แล้ว`);
   const now = nowIso();
-  const project: Project = { id: crypto.randomUUID(), slug, name, kind, province: (p.province ?? "").trim(), shard, status: "active", created_at: now };
+  const project: Project = { id: crypto.randomUUID(), slug, name, kind, province: (p.province ?? "").trim(), shard, status: "active", created_at: now, trial_ends_at: trialEnd() };
   await db.batch([
-    db.prepare(`INSERT INTO projects (id, slug, name, kind, province, shard, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
-      .bind(project.id, slug, name, kind, project.province, shard, "active", now),
+    db.prepare(`INSERT INTO projects (id, slug, name, kind, province, shard, status, created_at, trial_ends_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+      .bind(project.id, slug, name, kind, project.province, shard, "active", now, project.trial_ends_at),
     db.prepare(`INSERT INTO memberships (project_id, email, role, created_at) VALUES (?, ?, 'owner', ?)`).bind(project.id, owner, now),
   ]);
   return project;
@@ -90,6 +97,24 @@ export async function getStaffRole(db: D1Like, email: string, initialAdmin = "")
   const r = await db.prepare(`SELECT role FROM platform_staff WHERE email = ?`).bind(e).first<{ role: string }>();
   if (!r) return null;
   return r.role === "admin" ? "admin" : "support";
+}
+
+export async function listStaff(db: D1Like) {
+  return (await db.prepare(`SELECT email, role, created_at FROM platform_staff ORDER BY email`).all<{ email: string; role: string; created_at: string }>()).results;
+}
+export async function upsertStaff(db: D1Like, emailRaw: string, roleRaw: string) {
+  const email = normEmail(emailRaw);
+  if (!EMAIL_OK.test(email)) throw new Error("อีเมลไม่ถูกต้อง");
+  const role = roleRaw === "admin" ? "admin" : "support";
+  await db.prepare(`INSERT INTO platform_staff (email, role, created_at) VALUES (?, ?, ?) ON CONFLICT(email) DO UPDATE SET role = excluded.role`).bind(email, role, nowIso()).run();
+}
+export async function removeStaff(db: D1Like, emailRaw: string, by: string) {
+  const email = normEmail(emailRaw);
+  if (email === normEmail(by)) throw new Error("ลบสิทธิ์ของตัวเองไม่ได้");
+  await db.prepare(`DELETE FROM platform_staff WHERE email = ?`).bind(email).run();
+}
+export async function ownersOf(db: D1Like, projectId: string) {
+  return (await db.prepare(`SELECT email FROM memberships WHERE project_id = ? AND role = 'owner' ORDER BY email`).bind(projectId).all<{ email: string }>()).results.map((r) => r.email);
 }
 
 // ── สิทธิ์ทีมช่วยเหลือ ──

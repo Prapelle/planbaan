@@ -20,7 +20,7 @@ async function listTables(db: D1Like): Promise<string[]> {
   return r.results.map((x) => x.name).filter((n) => TABLE_OK.test(n));
 }
 
-async function gzip(text: string): Promise<Uint8Array> {
+export async function gzip(text: string): Promise<Uint8Array> {
   const stream = new Blob([text]).stream().pipeThrough(new CompressionStream("gzip"));
   return new Uint8Array(await new Response(stream).arrayBuffer());
 }

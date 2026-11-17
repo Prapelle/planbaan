@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
 
 async function guardEdit(id: string) {
   const ctx = await requireProject({ action: "edit", target: `/leads/${id}` });
-  if (!canEditData(ctx.role, ctx.access.supportCanEdit)) back(`/leads/${id}`, { error: "ไม่มีสิทธิ์แก้ไขข้อมูลลูกค้า" });
+  if (!(canEditData(ctx.role, ctx.access.supportCanEdit) && !ctx.readonly)) back(`/leads/${id}`, { error: "ไม่มีสิทธิ์แก้ไขข้อมูลลูกค้า" });
   return ctx;
 }
 
@@ -62,7 +62,7 @@ export default async function LeadPage({ params, searchParams }: { params: Promi
   const lead = await ctx.db.get("leads", id);
   if (!lead) notFound();
   const { error, msg } = await searchParams;
-  const canEdit = canEditData(ctx.role, ctx.access.supportCanEdit);
+  const canEdit = (canEditData(ctx.role, ctx.access.supportCanEdit) && !ctx.readonly);
   const [plots, members, history] = await Promise.all([
     ctx.db.list("plots", { limit: 2000 }), listMembers(controlDb(ctx.env), ctx.project.id), S.leadHistory(ctx.db, id),
   ]);
@@ -137,6 +137,9 @@ export default async function LeadPage({ params, searchParams }: { params: Promi
           )}
           <section className="rounded-lg border border-slate-200 bg-white p-4 text-sm">
             <h2 className="mb-2 font-semibold">ประวัติ</h2>
+            {S.daysSince(String(lead.created_at)) > Number(process.env.ARCHIVE_DAYS ?? 365) && (
+              <p className="mb-2 text-xs text-slate-600">ประวัติที่เก่ากว่า 1 ปีย้ายไปเก็บถาวรแล้ว เจ้าของโครงการดาวน์โหลดได้ที่หน้าส่งออกข้อมูล</p>
+            )}
             <ol className="flex flex-col gap-2">
               {history.map((h) => (
                 <li key={h.id} className="border-l-2 border-slate-300 pl-3">

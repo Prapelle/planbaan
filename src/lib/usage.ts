@@ -42,12 +42,32 @@ export async function logUsage(db: D1Like, e: { projectId: string; event: UsageE
 export async function usageSummary(db: D1Like, now = new Date()) {
   const since = new Date(now.getTime() - 7 * 86400_000).toISOString();
   const r = await db.prepare(`
-    SELECT p.id, p.slug, p.name, p.kind, p.province, p.status, p.created_at,
+    SELECT p.id, p.slug, p.name, p.kind, p.province, p.status, p.created_at, p.trial_ends_at, p.pure_until, p.paid_until,
       (SELECT MAX(at) FROM usage_events u WHERE u.project_id = p.id) AS last_at,
       (SELECT COUNT(DISTINCT actor_hash) FROM usage_events u WHERE u.project_id = p.id AND u.at >= ? AND actor_hash <> '') AS users_7d,
       (SELECT COUNT(*) FROM usage_events u WHERE u.project_id = p.id AND u.at >= ?) AS events_7d,
       (SELECT COUNT(*) FROM memberships m WHERE m.project_id = p.id) AS members
     FROM projects p ORDER BY p.created_at DESC`).bind(since, since)
-    .all<{ id: string; slug: string; name: string; kind: string; province: string; status: string; created_at: string; last_at: string | null; users_7d: number; events_7d: number; members: number }>();
+    .all<{ id: string; slug: string; name: string; kind: string; province: string; status: string; created_at: string; trial_ends_at: string; pure_until: string; paid_until: string; last_at: string | null; users_7d: number; events_7d: number; members: number }>();
   return r.results;
+}
+
+/** การใช้งานของโครงการเดียว N วันล่าสุด: แยกตามเหตุการณ์ ตามหน้า และรายวัน (ไม่มีเนื้อหาข้อมูลลูกค้า) */
+export async function projectUsage(db: D1Like, projectId: string, days = 30, now = new Date()) {
+  const since = new Date(now.getTime() - days * 86400_000).toISOString();
+  const [byEvent, byPage, daily, users] = await Promise.all([
+    db.prepare(`SELECT event, COUNT(*) AS n FROM usage_events WHERE project_id = ? AND at >= ? GROUP BY event ORDER BY n DESC`).bind(projectId, since).all<{ event: string; n: number }>(),
+    db.prepare(`SELECT json_extract(meta, '$.page') AS page, COUNT(*) AS n FROM usage_events WHERE project_id = ? AND at >= ? AND event = 'page_view' GROUP BY page ORDER BY n DESC`).bind(projectId, since).all<{ page: string; n: number }>(),
+    db.prepare(`SELECT substr(datetime(at, '+7 hours'), 1, 10) AS day, COUNT(*) AS n, COUNT(DISTINCT actor_hash) AS users FROM usage_events WHERE project_id = ? AND at >= ? GROUP BY day ORDER BY day`).bind(projectId, since).all<{ day: string; n: number; users: number }>(),
+    db.prepare(`SELECT COUNT(DISTINCT actor_hash) AS n FROM usage_events WHERE project_id = ? AND at >= ? AND actor_hash <> ''`).bind(projectId, since).first<{ n: number }>(),
+  ]);
+  return { byEvent: byEvent.results, byPage: byPage.results.filter((r) => r.page), daily: daily.results, users: Number(users?.n ?? 0) };
+}
+
+/** มีกี่โครงการที่เปิดใช้แต่ละหน้าใน N วัน (ดูว่าฟีเจอร์ไหนถูกใช้จริง) */
+export async function featureAdoption(db: D1Like, days = 30, now = new Date()) {
+  const since = new Date(now.getTime() - days * 86400_000).toISOString();
+  const r = await db.prepare(`SELECT json_extract(meta, '$.page') AS page, COUNT(DISTINCT project_id) AS projects, COUNT(*) AS views
+    FROM usage_events WHERE event = 'page_view' AND at >= ? GROUP BY page ORDER BY projects DESC, views DESC`).bind(since).all<{ page: string; projects: number; views: number }>();
+  return r.results.filter((x) => x.page);
 }

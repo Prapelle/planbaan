@@ -13,7 +13,7 @@ const here = (lead: string) => `/loans?lead=${encodeURIComponent(lead)}`;
 
 async function guard(lead: string) {
   const ctx = await requireProject({ action: "edit", target: here(lead) });
-  if (!canEditData(ctx.role, ctx.access.supportCanEdit)) back(here(lead), { error: "ไม่มีสิทธิ์แก้ไขข้อมูลสินเชื่อ" });
+  if (!(canEditData(ctx.role, ctx.access.supportCanEdit) && !ctx.readonly)) back(here(lead), { error: "ไม่มีสิทธิ์แก้ไขข้อมูลสินเชื่อ" });
   return ctx;
 }
 async function run(lead: string, fn: (ctx: Awaited<ReturnType<typeof guard>>) => Promise<unknown>, msg: string) {
@@ -69,7 +69,7 @@ export default async function LoansPage({ searchParams }: { searchParams: Promis
   const ctx = await requireProject({ action: "view", target: "/loans" });
   await ctx.usage("page_view", { page: "loans" });
   const { lead: selId, error, msg } = await searchParams;
-  const canEdit = canEditData(ctx.role, ctx.access.supportCanEdit);
+  const canEdit = (canEditData(ctx.role, ctx.access.supportCanEdit) && !ctx.readonly);
   const cases = await L.loanCases(ctx.db);
   const sel = cases.find((c) => c.lead.id === selId) ?? cases[0] ?? null;
 

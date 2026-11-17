@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
 
 async function guardEdit(target: string) {
   const ctx = await requireProject({ action: "edit", target });
-  if (!canEditData(ctx.role, ctx.access.supportCanEdit)) back("/leads", { error: "ไม่มีสิทธิ์แก้ไขข้อมูลลูกค้า" });
+  if (!(canEditData(ctx.role, ctx.access.supportCanEdit) && !ctx.readonly)) back("/leads", { error: "ไม่มีสิทธิ์แก้ไขข้อมูลลูกค้า" });
   return ctx;
 }
 
@@ -44,7 +44,7 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
   const ctx = await requireProject({ action: "view", target: "/leads" });
   await ctx.usage("page_view", { page: "leads" });
   const { q, mine, error, msg } = await searchParams;
-  const canEdit = canEditData(ctx.role, ctx.access.supportCanEdit);
+  const canEdit = (canEditData(ctx.role, ctx.access.supportCanEdit) && !ctx.readonly);
   const [all, plots, members, apps] = await Promise.all([
     ctx.db.list("leads", { limit: 2000, orderBy: "updated_at", desc: true }),
     ctx.db.list("plots", { limit: 2000 }),
