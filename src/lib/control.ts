@@ -8,7 +8,7 @@ import { type ProjectRole, normRole } from "./roles";
 import { trialEnd } from "./entitlement";
 
 export type Project = { id: string; slug: string; name: string; kind: string; province: string; shard: string; status: string; created_at: string;
-  trial_ends_at?: string; pure_until?: string; paid_until?: string; plan_image?: string };
+  trial_ends_at?: string; pure_until?: string; paid_until?: string; plan_image?: string; construction_enabled?: number; build_stale_days?: number };
 export type SupportGrant = { id: string; project_id: string; granted_by: string; can_edit: number; reason: string; expires_at: string; revoked_at: string | null; created_at: string };
 
 const normEmail = (e: string) => e.trim().toLowerCase();
@@ -115,6 +115,46 @@ export async function removeStaff(db: D1Like, emailRaw: string, by: string) {
 }
 export async function ownersOf(db: D1Like, projectId: string) {
   return (await db.prepare(`SELECT email FROM memberships WHERE project_id = ? AND role = 'owner' ORDER BY email`).bind(projectId).all<{ email: string }>()).results.map((r) => r.email);
+}
+
+// ── ลิงก์ส่วนตัวของเจ้าของบ้าน (ส่วนก่อสร้าง) ──
+async function sha256Hex(s: string) {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));
+  return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+const TOKEN_OK = /^[A-Za-z0-9_-]{40,64}$/;
+/** ออกลิงก์ใหม่ (ลิงก์เดิมของหลังนี้ถูกยกเลิก) คืน token ครั้งเดียว ระบบเก็บแค่ค่า hash */
+export async function createShareLink(db: D1Like, projectId: string, buildId: string, by: string): Promise<string> {
+  const bytes = crypto.getRandomValues(new Uint8Array(32));
+  const token = btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  const now = nowIso();
+  await db.batch([
+    db.prepare(`UPDATE share_links SET revoked_at = ? WHERE project_id = ? AND build_id = ? AND revoked_at IS NULL`).bind(now, projectId, buildId),
+    db.prepare(`INSERT INTO share_links (token_hash, project_id, build_id, created_by, created_at) VALUES (?, ?, ?, ?, ?)`).bind(await sha256Hex(token), projectId, buildId, by, now),
+  ]);
+  return token;
+}
+export async function revokeShareLinks(db: D1Like, projectId: string, buildId: string) {
+  await db.prepare(`UPDATE share_links SET revoked_at = ? WHERE project_id = ? AND build_id = ? AND revoked_at IS NULL`).bind(nowIso(), projectId, buildId).run();
+}
+export async function activeShareLink(db: D1Like, projectId: string, buildId: string) {
+  return db.prepare(`SELECT created_at, created_by FROM share_links WHERE project_id = ? AND build_id = ? AND revoked_at IS NULL ORDER BY created_at DESC LIMIT 1`).bind(projectId, buildId).first<{ created_at: string; created_by: string }>();
+}
+/** token → โครงการ + งาน (เฉพาะลิงก์ที่ยังไม่ถูกยกเลิก) */
+export async function resolveShareLink(db: D1Like, token: string) {
+  if (!TOKEN_OK.test(token)) return null;
+  const r = await db.prepare(`SELECT s.build_id, p.* FROM share_links s JOIN projects p ON p.id = s.project_id WHERE s.token_hash = ? AND s.revoked_at IS NULL`)
+    .bind(await sha256Hex(token)).first<Project & { build_id: string }>();
+  if (!r) return null;
+  const { build_id, ...project } = r;
+  return { project: project as Project, buildId: build_id };
+}
+export async function setConstruction(db: D1Like, projectId: string, p: { enabled?: boolean; staleDays?: number }) {
+  if (p.enabled !== undefined) await db.prepare(`UPDATE projects SET construction_enabled = ? WHERE id = ?`).bind(p.enabled ? 1 : 0, projectId).run();
+  if (p.staleDays !== undefined) {
+    if (!Number.isInteger(p.staleDays) || p.staleDays < 1 || p.staleDays > 60) throw new Error("จำนวนวันเตือนต้องเป็น 1–60");
+    await db.prepare(`UPDATE projects SET build_stale_days = ? WHERE id = ?`).bind(p.staleDays, projectId).run();
+  }
 }
 
 // ── สิทธิ์ทีมช่วยเหลือ ──

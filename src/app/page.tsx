@@ -5,6 +5,7 @@ import { controlDb, getEnv } from "@/lib/d1";
 import { getStaffRole, projectsOfEmail } from "@/lib/control";
 import { ROLE_LABEL } from "@/lib/roles";
 import * as S from "@/lib/sales";
+import * as C from "@/lib/construction";
 
 export const dynamic = "force-dynamic";
 
@@ -50,9 +51,21 @@ export default async function Home() {
 async function ProjectHome() {
   const ctx = await requireProject({ action: "view", target: "/" });
   await ctx.usage("page_view", { page: "home" });
-  const o = await S.overview(ctx.db);
+  const builder = ctx.project.kind === "builder";
+  const [o, board] = await Promise.all([
+    S.overview(ctx.db),
+    ctx.project.construction_enabled ? C.buildBoard(ctx.db, Number(ctx.project.build_stale_days ?? 7)) : Promise.resolve(null),
+  ]);
+  const L = S.stageLabels(ctx.project.kind);
   const maxStage = Math.max(1, ...S.PIPELINE.map((s) => o.byStage[s]));
-  const kpis = [
+  const kpis = builder ? [
+    { label: "ลูกค้าทั้งหมด", value: o.totalLeads, note: `เดือนนี้ +${o.newThisMonth}` },
+    { label: `${L.visited}ขึ้นไป`, value: o.reachedVisit, note: "นับรวมขั้นที่เลยมาแล้ว" },
+    { label: `${L.booked}ขึ้นไป`, value: o.reachedBooked, note: `${L.booked} ${L.loan} ${L.transferred}` },
+    { label: L.transferred, value: o.transferred, note: "หลัง" },
+    { label: "กำลังสร้าง", value: board?.counts.active ?? 0, note: board ? `ช้ากว่าแผน ${board.counts.late}` : "ยังไม่เปิดส่วนก่อสร้าง" },
+    { label: `ค้างติดตามเกิน ${S.STALE_DAYS} วัน`, value: o.stale.length, note: "ราย" },
+  ] : [
     { label: "ลูกค้าทั้งหมด", value: o.totalLeads, note: `เดือนนี้ +${o.newThisMonth}` },
     { label: "เข้าชมแล้วขึ้นไป", value: o.reachedVisit, note: "นับรวมขั้นที่เลยมาแล้ว" },
     { label: "จองขึ้นไป", value: o.reachedBooked, note: "จอง ยื่นกู้ และโอน" },
@@ -60,9 +73,10 @@ async function ProjectHome() {
     { label: "แปลงว่าง", value: o.plotStatus.available, note: o.plotStatus.rent ? `ให้เช่า ${o.plotStatus.rent}` : "ยังไม่มีผู้จอง" },
     { label: `ค้างติดตามเกิน ${S.STALE_DAYS} วัน`, value: o.stale.length, note: "ราย" },
   ];
+  const watch = board ? board.all.filter((b) => b.build.status !== "done" && (b.stale || b.lateDays > 0 || b.overdueDays > 0 || b.payDue > 0)).slice(0, 8) : [];
   const LeadRow = ({ l, right }: { l: Record<string, unknown>; right: string }) => (
     <li><Link href={`/leads/${l.id}`} className="flex min-h-11 items-center justify-between gap-3 rounded-md border border-slate-200 px-3 hover:border-brand-500">
-      <span><b>{String(l.name)}</b> <span className="text-xs text-slate-600">{S.STAGE_LABEL[l.stage as S.Stage]} · {S.CHANNEL_LABEL[l.channel as S.Channel] ?? ""}</span></span>
+      <span><b>{String(l.name)}</b> <span className="text-xs text-slate-600">{S.stageLabels(ctx.project.kind)[l.stage as S.Stage]} · {S.CHANNEL_LABEL[l.channel as S.Channel] ?? ""}</span></span>
       <span className="whitespace-nowrap text-sm font-semibold">{right}</span>
     </Link></li>
   );
@@ -78,18 +92,40 @@ async function ProjectHome() {
           </div>
         ))}
       </div>
+      {board && (
+        <section className="mb-4 rounded-lg border border-slate-200 bg-white p-4">
+          <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
+            <h2 className="font-semibold">ก่อสร้าง · กำลังสร้าง {board.counts.active} หลัง</h2>
+            <Link href="/build" className="text-sm text-brand-700 underline">ดูทั้งหมด</Link>
+          </div>
+          {watch.length === 0 ? <p className="text-sm text-slate-600">ไม่มีหลังที่ช้า ค้างอัปเดต หรือรอเก็บเงิน</p> : (
+            <ul className="flex flex-col gap-2">
+              {watch.map((b) => (
+                <li key={b.build.id}><Link href={`/build/${b.build.id}`} className="flex min-h-11 flex-wrap items-center justify-between gap-2 rounded-md border border-slate-200 px-3 py-1 hover:border-brand-500">
+                  <span><b>{String(b.build.title)}</b> <span className="text-xs text-slate-600">{b.pct}% · {b.current ? String(b.current.name) : "ครบงวด"}</span></span>
+                  <span className="flex flex-wrap gap-2 text-xs font-semibold">
+                    {b.lateDays > 0 && <span className="text-red-700">ช้า {b.lateDays} วัน</span>}
+                    {b.stale && <span className="text-red-700">ไม่อัปเดต {b.idleDays} วัน</span>}
+                    {b.payDue > 0 && <span className="text-amber-800">รอเก็บ {b.payDue.toLocaleString("th-TH")} บาท</span>}
+                  </span>
+                </Link></li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <section className="rounded-lg border border-slate-200 bg-white p-4">
           <h2 className="mb-3 font-semibold">ลูกค้าในแต่ละขั้น</h2>
           <ul className="flex flex-col gap-2 text-sm">
             {S.PIPELINE.map((s) => (
               <li key={s} className="flex items-center gap-3">
-                <span className="w-28 shrink-0">{S.STAGE_LABEL[s]}</span>
+                <span className="w-28 shrink-0">{S.stageLabels(ctx.project.kind)[s]}</span>
                 <span className="h-3 flex-1 rounded bg-slate-200"><span className="block h-3 rounded bg-brand-600" style={{ width: `${(o.byStage[s] / maxStage) * 100}%` }} /></span>
                 <span className="w-8 text-right font-semibold tabular-nums">{o.byStage[s]}</span>
               </li>
             ))}
-            <li className="flex items-center gap-3 text-slate-600"><span className="w-28 shrink-0">ไม่ซื้อ</span><span className="flex-1" /><span className="w-8 text-right tabular-nums">{o.byStage.lost}</span></li>
+            <li className="flex items-center gap-3 text-slate-600"><span className="w-28 shrink-0">{L.lost}</span><span className="flex-1" /><span className="w-8 text-right tabular-nums">{o.byStage.lost}</span></li>
           </ul>
         </section>
         <section className="rounded-lg border border-slate-200 bg-white p-4">
@@ -105,7 +141,7 @@ async function ProjectHome() {
           {o.byChannel.length === 0 ? <p className="text-sm text-slate-600">ยังไม่มีลูกค้า</p> : (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[480px] text-sm">
-                <thead><tr className="text-right text-slate-600"><th className="p-2 text-left font-medium">ช่องทาง</th><th className="p-2 font-medium">ลูกค้า</th><th className="p-2 font-medium">เข้าชมแล้ว</th><th className="p-2 font-medium">จองขึ้นไป</th><th className="p-2 font-medium">อัตราจอง</th></tr></thead>
+                <thead><tr className="text-right text-slate-600"><th className="p-2 text-left font-medium">ช่องทาง</th><th className="p-2 font-medium">ลูกค้า</th><th className="p-2 font-medium">{L.visited}</th><th className="p-2 font-medium">{L.booked}ขึ้นไป</th><th className="p-2 font-medium">อัตรา{L.booked}</th></tr></thead>
                 <tbody>{o.byChannel.map((c) => (
                   <tr key={c.channel} className="border-t border-slate-200 text-right tabular-nums">
                     <th scope="row" className="p-2 text-left font-medium">{S.CHANNEL_LABEL[c.channel]}</th>
@@ -116,7 +152,7 @@ async function ProjectHome() {
               </table>
             </div>
           )}
-          <p className="mt-2 text-xs text-slate-600">ต้นทุนต่อลูกค้าและต่อการจองแยกตามช่องทางจะเพิ่มในระยะ 2 (หน้าการตลาด)</p>
+          <p className="mt-2 text-xs text-slate-600">ต้นทุนต่อลูกค้าและต่อการจองแยกตามช่องทาง ดูที่หน้า<Link href="/marketing" className="text-brand-700 underline">การตลาด</Link></p>
         </section>
       </div>
     </ProjectShell>

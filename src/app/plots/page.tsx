@@ -177,7 +177,7 @@ export default async function PlotsPage({ searchParams }: { searchParams: Promis
             <h3 className="mb-1 text-sm font-semibold text-slate-600">ลูกค้าที่ผูกกับแปลงนี้</h3>
             {selLeads.length === 0 ? <p className="mb-4 text-sm">ยังไม่มี</p> : (
               <ul className="mb-4 flex flex-col gap-1 text-sm">
-                {selLeads.map((l) => <li key={l.id}><Link href={`/leads/${l.id}`} className="text-brand-700 underline">{String(l.name)}</Link> · {S.STAGE_LABEL[l.stage as S.Stage]}</li>)}
+                {selLeads.map((l) => <li key={l.id}><Link href={`/leads/${l.id}`} className="text-brand-700 underline">{String(l.name)}</Link> · {S.stageLabels(ctx.project.kind)[l.stage as S.Stage]}</li>)}
               </ul>
             )}
             {canEdit && (

@@ -5,11 +5,16 @@ import { SOURCE_LABEL } from "@/lib/entitlement";
 import { ROLE_LABEL, canExport, canGrantSupport, canManageMembers } from "@/lib/roles";
 
 export function ProjectShell({ ctx, active, children }: { ctx: ProjectCtx; active: string; children: React.ReactNode }) {
-  const nav = [
+  const builder = ctx.project.kind === "builder";
+  const foreman = ctx.role === "foreman";
+  const build = { href: "/build", label: builder ? "งานก่อสร้าง" : "ก่อสร้าง", show: true };
+  const nav = foreman ? [build] : [
     { href: "/", label: "ภาพรวม", show: true },
-    { href: "/plots", label: "ผังแปลง", show: true },
+    ...(builder ? [build] : []),
+    { href: "/plots", label: "ผังแปลง", show: !builder },
     { href: "/leads", label: "ลูกค้า", show: true },
-    { href: "/loans", label: "สินเชื่อ", show: true },
+    { href: "/loans", label: "สินเชื่อ", show: !builder },
+    ...(builder ? [] : [build]),
     { href: "/marketing", label: "การตลาด", show: true },
     { href: "/team", label: "ผลงานรายคน", show: true },
     { href: "/export", label: "ส่งออกข้อมูล", show: canExport(ctx.role) },

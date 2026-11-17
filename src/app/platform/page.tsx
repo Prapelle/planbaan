@@ -53,7 +53,7 @@ const ago = (iso: string | null) => {
 const STATE_CLS: Record<EntState, string> = {
   active: "bg-emerald-100 text-emerald-900", expiring: "bg-amber-100 text-amber-900", grace: "bg-red-100 text-red-800", readonly: "bg-red-700 text-white",
 };
-const PAGE_LABEL: Record<string, string> = { home: "ภาพรวม", plots: "ผังแปลง", leads: "ลูกค้า", lead: "ลูกค้ารายคน", loans: "สินเชื่อ", marketing: "การตลาด", team: "ผลงานรายคน", members: "ผู้ใช้", support: "สิทธิ์ทีมช่วยเหลือ" };
+const PAGE_LABEL: Record<string, string> = { build: "ก่อสร้าง", build_detail: "ก่อสร้างรายหลัง",  home: "ภาพรวม", plots: "ผังแปลง", leads: "ลูกค้า", lead: "ลูกค้ารายคน", loans: "สินเชื่อ", marketing: "การตลาด", team: "ผลงานรายคน", members: "ผู้ใช้", support: "สิทธิ์ทีมช่วยเหลือ" };
 const input = "min-h-11 rounded-md border border-slate-300 px-3";
 
 export default async function PlatformPage({ searchParams }: { searchParams: Promise<{ error?: string; q?: string; state?: string }> }) {

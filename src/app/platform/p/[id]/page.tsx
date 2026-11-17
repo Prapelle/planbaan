@@ -3,7 +3,10 @@ import { notFound, redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { projectUrl, requireStaff } from "@/lib/context";
 import { controlDb } from "@/lib/d1";
-import { getProject, listMembers, listSupportGrants, ownersOf } from "@/lib/control";
+import { getProject, listMembers, listSupportGrants, ownersOf, setConstruction } from "@/lib/control";
+import { shardDb } from "@/lib/d1";
+import { tenantDb } from "@/lib/tenant-db";
+import { BUILD_PRICE, billableInMonth } from "@/lib/construction";
 import { projectUsage } from "@/lib/usage";
 import { ENT, SOURCE_LABEL, STATE_LABEL, entitlementOf, listPurchases, recordPurchase, setAccess } from "@/lib/entitlement";
 import { ROLE_LABEL, type ProjectRole } from "@/lib/roles";
@@ -41,6 +44,16 @@ async function accessAction(f: FormData) {
   go(id, { msg: "บันทึกสิทธิ์แล้ว" });
 }
 
+async function constructionAction(f: FormData) {
+  "use server";
+  const { env, staffRole } = await requireStaff();
+  const id = String(f.get("id"));
+  if (staffRole !== "admin") go(id, { error: "เปิด/ปิดส่วนก่อสร้างได้เฉพาะ admin" });
+  await setConstruction(controlDb(env), id, { enabled: f.get("enabled") === "1" });
+  revalidatePath(`/platform/p/${id}`);
+  go(id, { msg: f.get("enabled") === "1" ? "เปิดส่วนก่อสร้างแล้ว" : "ปิดส่วนก่อสร้างแล้ว (ข้อมูลยังอยู่ เปิดใหม่ได้)" });
+}
+
 const EVENT_LABEL: Record<string, string> = {
   page_view: "เปิดหน้า", login: "เข้าสู่ระบบ", lead_created: "เพิ่มลูกค้า", lead_stage_changed: "เปลี่ยนขั้นลูกค้า", plot_created: "เพิ่มแปลง", plot_updated: "แก้แปลง",
   member_added: "เพิ่มผู้ใช้", member_removed: "ลบผู้ใช้", support_granted: "เปิดสิทธิ์ทีมช่วยเหลือ", support_revoked: "ปิดสิทธิ์ทีมช่วยเหลือ",
@@ -63,6 +76,10 @@ export default async function ProjectAdminPage({ params, searchParams }: { param
     ownersOf(db, id), listMembers(db, id), listPurchases(db, id), projectUsage(db, id, 30), listSupportGrants(db, id),
   ]);
   const ent = entitlementOf(project);
+  // นับเฉพาะจำนวนหลังและวันที่ (ไม่อ่านเนื้อหาอื่นของงาน) เพื่อคิดเงินส่วนก่อสร้าง
+  const builds = (await tenantDb(shardDb(env, project.shard), id).list("builds", { limit: 2000 })).map((b) => ({ id: b.id, start_date: b.start_date, done_at: b.done_at, status: b.status }));
+  const months = lastMonths(6);
+  const billing = months.map((m) => ({ month: m, houses: billableInMonth(builds, m) }));
   const roleCount = members.reduce<Record<string, number>>((a, m) => { a[m.role] = (a[m.role] ?? 0) + 1; return a; }, {});
   const maxDay = Math.max(1, ...usage.daily.map((d) => d.n));
   const byMonth = new Map(purchases.map((p) => [p.month, p]));
@@ -144,6 +161,17 @@ export default async function ProjectAdminPage({ params, searchParams }: { param
           </fieldset>
         </form>
       </div>
+
+      <section className="mb-4 rounded-lg border border-slate-200 bg-white p-4 text-sm">
+        <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
+          <h2 className="font-semibold">ส่วนก่อสร้าง (เสียเงิน) · {project.construction_enabled ? "เปิดอยู่" : "ปิดอยู่"}</h2>
+          <form action={constructionAction}><input type="hidden" name="id" value={id} /><input type="hidden" name="enabled" value={project.construction_enabled ? "" : "1"} />
+            <button disabled={staffRole !== "admin"} className={`min-h-11 rounded-md px-4 font-semibold ${project.construction_enabled ? "border border-red-300 text-red-700" : "bg-brand-600 text-white"}`}>{project.construction_enabled ? "ปิดส่วนก่อสร้าง" : "เปิดส่วนก่อสร้าง"}</button></form>
+        </div>
+        <p className="mb-2 text-slate-600">คิด {BUILD_PRICE().toLocaleString("th-TH")} บาทต่อหลังที่กำลังก่อสร้างในเดือนนั้น (เริ่มแล้วและยังไม่ส่งมอบก่อนต้นเดือน) · ออกบิลจากระบบบัญชีเอง</p>
+        <table className="w-full max-w-md"><thead><tr className="text-left text-slate-600"><th className="pb-1 font-medium">เดือน</th><th className="pb-1 text-right font-medium">หลัง</th><th className="pb-1 text-right font-medium">ยอด (บาท)</th></tr></thead>
+          <tbody>{billing.map((b) => <tr key={b.month} className="border-t border-slate-100"><td className="py-1">{b.month}</td><td className="py-1 text-right tabular-nums">{b.houses}</td><td className="py-1 text-right tabular-nums">{(b.houses * BUILD_PRICE()).toLocaleString("th-TH")}</td></tr>)}</tbody></table>
+      </section>
 
       <section className="mb-4 rounded-lg border border-slate-200 bg-white p-4 text-sm">
         <h2 className="mb-1 font-semibold">การใช้งาน 30 วัน</h2>

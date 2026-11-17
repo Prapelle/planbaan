@@ -33,7 +33,7 @@ async function moveAction(f: FormData) {
   const id = fv(f, "id");
   const ctx = await guardEdit(`/leads/${id}`);
   try {
-    await S.moveLead(ctx.db, id, fv(f, "stage"), ctx.email);
+    await S.moveLead(ctx.db, id, fv(f, "stage"), ctx.email, { requirePlot: ctx.project.kind !== "builder" });
     await ctx.usage("lead_stage_changed", { to: fv(f, "stage") });
   } catch (e) { back("/leads", { error: errMsg(e) }); }
   revalidatePath("/leads");
@@ -104,8 +104,8 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
           {columns.map((stage) => {
             const cards = leads.filter((l) => l.stage === stage);
             return (
-              <section key={stage} aria-label={S.STAGE_LABEL[stage]} className="flex min-w-0 flex-1 flex-col gap-2 rounded-lg bg-slate-200/70 p-2">
-                <h2 className="flex justify-between px-1 text-sm font-semibold"><span>{S.STAGE_LABEL[stage]}</span><span className="text-slate-600">{cards.length}</span></h2>
+              <section key={stage} aria-label={S.stageLabels(ctx.project.kind)[stage]} className="flex min-w-0 flex-1 flex-col gap-2 rounded-lg bg-slate-200/70 p-2">
+                <h2 className="flex justify-between px-1 text-sm font-semibold"><span>{S.stageLabels(ctx.project.kind)[stage]}</span><span className="text-slate-600">{cards.length}</span></h2>
                 {cards.map((l) => {
                   const stale = S.isStale(l, now);
                   const prev = S.neighborStage(stage, -1), next = S.neighborStage(stage, 1);
@@ -127,13 +127,13 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
                           {prev && (
                             <form action={moveAction} className="flex-1">
                               <input type="hidden" name="id" value={l.id} /><input type="hidden" name="stage" value={prev} />
-                              <button aria-label={`ย้อนไป ${S.STAGE_LABEL[prev]}`} className="min-h-10 w-full rounded border border-slate-300 text-xs">‹ ย้อน</button>
+                              <button aria-label={`ย้อนไป ${S.stageLabels(ctx.project.kind)[prev]}`} className="min-h-10 w-full rounded border border-slate-300 text-xs">‹ ย้อน</button>
                             </form>
                           )}
                           {next && (
                             <form action={moveAction} className="flex-1">
                               <input type="hidden" name="id" value={l.id} /><input type="hidden" name="stage" value={next} />
-                              <button aria-label={`เลื่อนไป ${S.STAGE_LABEL[next]}`} className="min-h-10 w-full rounded bg-brand-600 text-xs font-semibold text-white">{S.STAGE_LABEL[next]} ›</button>
+                              <button aria-label={`เลื่อนไป ${S.stageLabels(ctx.project.kind)[next]}`} className="min-h-10 w-full rounded bg-brand-600 text-xs font-semibold text-white">{S.stageLabels(ctx.project.kind)[next]} ›</button>
                             </form>
                           )}
                         </div>

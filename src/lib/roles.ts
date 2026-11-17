@@ -5,13 +5,14 @@
  * - sales: ฝ่ายขาย แก้ข้อมูลลูกค้าและแปลงได้
  * - marketing: การตลาด แก้ได้เฉพาะงบและค่าโฆษณา ข้อมูลลูกค้าดูอย่างเดียว
  * - viewer: ดูอย่างเดียว
+ * - foreman: โฟร์แมน เห็นและอัปเดตได้เฉพาะส่วนก่อสร้าง ไม่เห็นข้อมูลลูกค้า
  * - support: ทีม PlanBaan ที่ลูกค้าเปิดสิทธิ์ให้ชั่วคราว (ไม่ได้เก็บใน memberships)
  */
-export type ProjectRole = "owner" | "manager" | "sales" | "marketing" | "viewer";
+export type ProjectRole = "owner" | "manager" | "sales" | "marketing" | "viewer" | "foreman";
 export type AccessRole = ProjectRole | "support";
-export const PROJECT_ROLES: ProjectRole[] = ["owner", "manager", "sales", "marketing", "viewer"];
+export const PROJECT_ROLES: ProjectRole[] = ["owner", "manager", "sales", "marketing", "viewer", "foreman"];
 export const ROLE_LABEL: Record<AccessRole, string> = {
-  owner: "เจ้าของโครงการ", manager: "ผู้จัดการ", sales: "ฝ่ายขาย", marketing: "การตลาด", viewer: "ดูอย่างเดียว", support: "ทีมช่วยเหลือ PlanBaan",
+  owner: "เจ้าของโครงการ", manager: "ผู้จัดการ", sales: "ฝ่ายขาย", marketing: "การตลาด", viewer: "ดูอย่างเดียว", foreman: "โฟร์แมน", support: "ทีมช่วยเหลือ PlanBaan",
 };
 export const normRole = (v: unknown): ProjectRole | null => {
   const r = String(v ?? "").trim().toLowerCase();
@@ -30,3 +31,10 @@ export const canExport = (r: AccessRole) => r === "owner" || r === "manager";
 /** งบและค่าโฆษณา */
 export const canEditMarketing = (r: AccessRole, supportCanEdit = false) =>
   r === "owner" || r === "manager" || r === "marketing" || (r === "support" && supportCanEdit);
+
+/** อัปเดตงานก่อสร้าง (ติ๊กงวด ถ่ายรูป บันทึกหน้างาน) */
+export const canUpdateBuild = (r: AccessRole, supportCanEdit = false) =>
+  r === "owner" || r === "manager" || r === "foreman" || (r === "support" && supportCanEdit);
+/** ตั้งค่างานก่อสร้าง: สร้างหลัง สัญญา งวดเงิน งานเพิ่ม-ลด ลิงก์เจ้าของบ้าน */
+export const canManageBuild = (r: AccessRole, supportCanEdit = false) =>
+  r === "owner" || r === "manager" || (r === "support" && supportCanEdit);

@@ -17,6 +17,11 @@ export const TENANT_TABLES = {
   loan_apps: ["lead_id", "bank", "status", "amount", "officer", "note"],
   marketing_spend: ["day", "month", "channel", "campaign", "amount", "source"],
   marketing_budget: ["month", "channel", "amount"],
+  builds: ["title", "plot_code", "lead_id", "customer_name", "start_date", "due_date", "contract_price", "status", "show_delay", "last_update_at", "done_at", "note"],
+  build_stages: ["build_id", "seq", "name", "planned_end", "done_at", "pay_amount", "paid_at", "draw_amount", "draw_status"],
+  build_photos: ["build_id", "stage_id", "r2_key", "caption", "published", "taken_by"],
+  build_changes: ["build_id", "title", "amount", "status", "decided_at", "decided_by", "decided_note", "created_by"],
+  build_log: ["build_id", "kind", "note", "actor"],
 } as const;
 
 /**

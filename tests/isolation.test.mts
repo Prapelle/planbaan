@@ -20,6 +20,13 @@ await A.insert("loan_apps", { lead_id: aL.id, bank: "ออมสิน" });
 await A.insert("marketing_spend", { day: "2026-11-01", month: "2026-11", channel: "facebook", amount: 1 });
 await B.insert("marketing_spend", { day: "2026-11-01", month: "2026-11", channel: "facebook", amount: 2 });
 await A.insert("marketing_budget", { month: "2026-11", channel: "facebook", amount: 1 });
+for (const [T, tag] of [[A, "a"], [B, "b"]] as const) {
+  const bd = await T.insert("builds", { title: `บ้าน ${tag}`, start_date: "2026-11-01", due_date: "2027-03-01", last_update_at: "2026-11-01T00:00:00Z" });
+  await T.insert("build_stages", { build_id: bd.id, seq: 1, name: "ฐานราก", planned_end: "2026-12-01" });
+  await T.insert("build_photos", { build_id: bd.id, r2_key: `files/x/${tag}.jpg` });
+  await T.insert("build_changes", { build_id: bd.id, title: "เพิ่ม", amount: 1 });
+  await T.insert("build_log", { build_id: bd.id, kind: "created" });
+}
 await B.insert("marketing_budget", { month: "2026-11", channel: "facebook", amount: 2 });
 await B.insert("loan_apps", { lead_id: bL.id, bank: "ออมสิน" });
 

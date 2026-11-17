@@ -11,6 +11,12 @@ export const STAGE_LABEL: Record<Stage, string> = {
   new: "รอติดต่อ", contacted: "ติดต่อได้แล้ว", visit_scheduled: "นัดเข้าชม", visited: "เข้าชมแล้ว",
   booked: "จอง", loan: "ยื่นกู้", transferred: "โอนแล้ว", lost: "ไม่ซื้อ",
 };
+/** บริษัทรับสร้างบ้าน: ขั้นเดียวกันภายใน แต่ชื่อขั้นต่างกัน (ดูที่ดิน → เสนอแบบและราคา → เซ็นสัญญา → ก่อสร้าง → ส่งมอบ) */
+export const BUILDER_STAGE_LABEL: Record<Stage, string> = {
+  new: "รอติดต่อ", contacted: "ติดต่อได้แล้ว", visit_scheduled: "ดูที่ดิน", visited: "เสนอแบบและราคา",
+  booked: "เซ็นสัญญา", loan: "ก่อสร้าง", transferred: "ส่งมอบ", lost: "ไม่สร้าง",
+};
+export const stageLabels = (kind?: string) => (kind === "builder" ? BUILDER_STAGE_LABEL : STAGE_LABEL);
 export const PIPELINE: Stage[] = ["new", "contacted", "visit_scheduled", "visited", "booked", "loan", "transferred"];
 const BOOKED_IDX = PIPELINE.indexOf("booked");
 export const stageIdx = (s: string) => PIPELINE.indexOf(s as Stage); // lost = -1
@@ -206,14 +212,14 @@ export async function updateLead(db: TenantDb, id: string, input: LeadInput, act
   await db.batch(keep([{ kind: "update", table: "leads", id, patch }, activityOp(id, "edit", actor), ...ops]));
 }
 
-export async function moveLead(db: TenantDb, id: string, stageRaw: string, actor: string) {
+export async function moveLead(db: TenantDb, id: string, stageRaw: string, actor: string, opts: { requirePlot?: boolean } = {}) {
   const lead = await db.get("leads", id);
   if (!lead) throw new Error("ไม่พบลูกค้ารายนี้");
   const stage = one(STAGES, stageRaw, "ขั้น");
   const from = String(lead.stage);
   if (stage === from) return;
   const plot = String(lead.plot_code);
-  if (stageIdx(stage) >= BOOKED_IDX && !plot) throw new Error("เลือกแปลงให้ลูกค้าก่อนเลื่อนไปขั้นจอง");
+  if (opts.requirePlot !== false && stageIdx(stage) >= BOOKED_IDX && !plot) throw new Error("เลือกแปลงให้ลูกค้าก่อนเลื่อนไปขั้นจอง");
   const st = await plotState(db, plot, id);
   checkPlotState(plot, st, stage);
   await db.batch(keep([
