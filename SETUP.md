@@ -26,7 +26,7 @@
 ## 4. เชื่อม GitHub กับ Cloudflare
 
 1. Workers & Pages → Create → **Import a repository** → เลือก `planbaan`
-2. Build command: `npx opennextjs-cloudflare build` · Deploy command: `npm run deploy`
+2. Build command: เว้นว่าง · Deploy command: `npm run deploy` (คำสั่งนี้สร้างตาราง build และ deploy ในตัว)
 3. Settings → **Variables and Secrets** เพิ่มค่าลับ:
 
 | ชื่อ | ค่า |
