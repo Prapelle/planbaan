@@ -11,8 +11,22 @@ import { type D1Like, nowIso } from "./d1";
 
 export const TENANT_TABLES = {
   plots: ["code", "zone", "house_type", "price", "house_status", "sale_status"],
-  leads: ["name", "phone", "channel", "stage", "plot_code", "owner_email", "last_contact_at"],
+  leads: ["name", "phone", "channel", "stage", "plot_code", "owner_email", "last_contact_at", "note", "next_follow_at"],
+  lead_activity: ["lead_id", "kind", "from_stage", "to_stage", "note", "actor"],
 } as const;
+
+/**
+ * จำนวนแถวของแต่ละโครงการ (สำหรับ back office วัดขนาดข้อมูล) — คืนแค่ตัวเลข ไม่มีเนื้อหา
+ * อ่านข้ามโครงการโดยตั้งใจ จึงอยู่ในไฟล์นี้ที่เดียว
+ */
+export async function rowCountsByProject(db: D1Like): Promise<Record<string, number>> {
+  const out: Record<string, number> = {};
+  for (const t of Object.keys(TENANT_TABLES)) {
+    const r = await db.prepare(`SELECT project_id, COUNT(*) AS n FROM "${t}" GROUP BY project_id`).all<{ project_id: string; n: number }>();
+    for (const x of r.results) out[x.project_id] = (out[x.project_id] ?? 0) + Number(x.n);
+  }
+  return out;
+}
 
 export type TenantTable = keyof typeof TENANT_TABLES;
 type Row = Record<string, unknown> & { id: string; project_id: string; created_at: string; updated_at: string };

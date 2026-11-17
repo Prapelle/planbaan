@@ -19,5 +19,7 @@ export const normRole = (v: unknown): ProjectRole | null => {
 };
 export const canManageMembers = (r: AccessRole) => r === "owner";
 export const canGrantSupport = (r: AccessRole) => r === "owner" || r === "manager";
-export const canEditData = (r: AccessRole, supportCanEdit = false) =>
+/** ตั้งค่าผังแปลง (สร้าง/ลบแปลง แก้ราคา แบบบ้าน) */
+export const canManagePlots = (r: AccessRole, supportCanEdit = false) => r === "owner" || r === "manager" || (r === "support" && supportCanEdit);
+export const canEditData =(r: AccessRole, supportCanEdit = false) =>
   r === "owner" || r === "manager" || r === "sales" || (r === "support" && supportCanEdit);

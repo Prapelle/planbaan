@@ -5,7 +5,9 @@ import { ROLE_LABEL, canGrantSupport, canManageMembers } from "@/lib/roles";
 
 export function ProjectShell({ ctx, active, children }: { ctx: ProjectCtx; active: string; children: React.ReactNode }) {
   const nav = [
-    { href: "/", label: "หน้าหลัก", show: true },
+    { href: "/", label: "ภาพรวม", show: true },
+    { href: "/plots", label: "ผังแปลง", show: true },
+    { href: "/leads", label: "ลูกค้า", show: true },
     { href: "/members", label: "ผู้ใช้ในโครงการ", show: canManageMembers(ctx.role) },
     { href: "/support", label: "สิทธิ์ทีมช่วยเหลือ", show: canGrantSupport(ctx.role) },
   ].filter((n) => n.show);
@@ -29,8 +31,8 @@ export function ProjectShell({ ctx, active, children }: { ctx: ProjectCtx; activ
           </form>
         </div>
       </header>
-      <div className="flex flex-1 flex-wrap">
-        <nav aria-label="เมนูหลัก" className="flex w-full flex-row gap-1 overflow-x-auto border-b border-slate-200 bg-white p-2 md:w-56 md:flex-col md:border-b-0 md:border-r">
+      <div className="flex flex-1 flex-col md:flex-row">
+        <nav aria-label="เมนูหลัก" className="flex w-full flex-row gap-1 overflow-x-auto border-b border-slate-200 bg-white p-2 md:w-52 md:shrink-0 md:flex-col md:border-b-0 md:border-r">
           {nav.map((n) => (
             <Link key={n.href} href={n.href} aria-current={active === n.href ? "page" : undefined}
               className={`flex min-h-11 items-center whitespace-nowrap rounded-md px-3 text-sm font-medium ${active === n.href ? "bg-brand-50 text-brand-800" : "text-slate-700 hover:bg-slate-100"}`}>
@@ -43,3 +45,17 @@ export function ProjectShell({ ctx, active, children }: { ctx: ProjectCtx; activ
     </div>
   );
 }
+
+export function Notice({ error, msg }: { error?: string; msg?: string }) {
+  if (error) return <p role="alert" className="mb-4 rounded-md bg-red-50 p-3 text-sm text-red-700">{error}</p>;
+  if (msg) return <p role="status" className="mb-4 rounded-md bg-emerald-50 p-3 text-sm text-emerald-800">{msg}</p>;
+  return null;
+}
+
+export const SALE_COLOR: Record<string, string> = {
+  available: "bg-white text-slate-900 border-slate-400",
+  booked: "bg-amber-300 text-slate-900 border-amber-500",
+  loan: "bg-blue-700 text-white border-blue-800",
+  transferred: "bg-slate-900 text-white border-slate-900",
+  rent: "bg-violet-700 text-white border-violet-800",
+};

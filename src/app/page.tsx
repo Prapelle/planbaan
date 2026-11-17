@@ -4,6 +4,7 @@ import { cfg, projectUrl, requireProject, sessionEmail, where } from "@/lib/cont
 import { controlDb, getEnv } from "@/lib/d1";
 import { getStaffRole, projectsOfEmail } from "@/lib/control";
 import { ROLE_LABEL } from "@/lib/roles";
+import * as S from "@/lib/sales";
 
 export const dynamic = "force-dynamic";
 
@@ -49,15 +50,75 @@ export default async function Home() {
 async function ProjectHome() {
   const ctx = await requireProject({ action: "view", target: "/" });
   await ctx.usage("page_view", { page: "home" });
-  const [plots, leads] = await Promise.all([ctx.db.count("plots"), ctx.db.count("leads")]);
+  const o = await S.overview(ctx.db);
+  const maxStage = Math.max(1, ...S.PIPELINE.map((s) => o.byStage[s]));
+  const kpis = [
+    { label: "ลูกค้าทั้งหมด", value: o.totalLeads, note: `เดือนนี้ +${o.newThisMonth}` },
+    { label: "เข้าชมแล้วขึ้นไป", value: o.reachedVisit, note: "นับรวมขั้นที่เลยมาแล้ว" },
+    { label: "จองขึ้นไป", value: o.reachedBooked, note: "จอง ยื่นกู้ และโอน" },
+    { label: "โอนแล้ว", value: o.transferred, note: `จาก ${o.totalPlots} แปลง` },
+    { label: "แปลงว่าง", value: o.plotStatus.available, note: o.plotStatus.rent ? `ให้เช่า ${o.plotStatus.rent}` : "ยังไม่มีผู้จอง" },
+    { label: `ค้างติดตามเกิน ${S.STALE_DAYS} วัน`, value: o.stale.length, note: "ราย" },
+  ];
+  const LeadRow = ({ l, right }: { l: Record<string, unknown>; right: string }) => (
+    <li><Link href={`/leads/${l.id}`} className="flex min-h-11 items-center justify-between gap-3 rounded-md border border-slate-200 px-3 hover:border-brand-500">
+      <span><b>{String(l.name)}</b> <span className="text-xs text-slate-600">{S.STAGE_LABEL[l.stage as S.Stage]} · {S.CHANNEL_LABEL[l.channel as S.Channel] ?? ""}</span></span>
+      <span className="whitespace-nowrap text-sm font-semibold">{right}</span>
+    </Link></li>
+  );
   return (
     <ProjectShell ctx={ctx} active="/">
-      <h1 className="mb-4 text-2xl font-bold">หน้าหลัก</h1>
-      <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <div className="rounded-lg border border-slate-200 bg-white p-4"><div className="text-sm text-slate-600">แปลงในระบบ</div><div className="text-3xl font-bold">{plots}</div></div>
-        <div className="rounded-lg border border-slate-200 bg-white p-4"><div className="text-sm text-slate-600">ลูกค้าในระบบ</div><div className="text-3xl font-bold">{leads}</div></div>
+      <h1 className="mb-4 text-2xl font-bold">ภาพรวม</h1>
+      <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+        {kpis.map((k) => (
+          <div key={k.label} className="rounded-lg border border-slate-200 bg-white p-4">
+            <div className="text-sm text-slate-600">{k.label}</div>
+            <div className="text-3xl font-bold tabular-nums">{k.value}</div>
+            <div className="text-xs text-slate-600">{k.note}</div>
+          </div>
+        ))}
       </div>
-      <p className="rounded-lg bg-white p-4 text-slate-700">ระบบพื้นฐานพร้อมแล้ว ผังแปลง ลูกค้า และหน้าภาพรวมจะเพิ่มในระยะ 1</p>
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <section className="rounded-lg border border-slate-200 bg-white p-4">
+          <h2 className="mb-3 font-semibold">ลูกค้าในแต่ละขั้น</h2>
+          <ul className="flex flex-col gap-2 text-sm">
+            {S.PIPELINE.map((s) => (
+              <li key={s} className="flex items-center gap-3">
+                <span className="w-28 shrink-0">{S.STAGE_LABEL[s]}</span>
+                <span className="h-3 flex-1 rounded bg-slate-200"><span className="block h-3 rounded bg-brand-600" style={{ width: `${(o.byStage[s] / maxStage) * 100}%` }} /></span>
+                <span className="w-8 text-right font-semibold tabular-nums">{o.byStage[s]}</span>
+              </li>
+            ))}
+            <li className="flex items-center gap-3 text-slate-600"><span className="w-28 shrink-0">ไม่ซื้อ</span><span className="flex-1" /><span className="w-8 text-right tabular-nums">{o.byStage.lost}</span></li>
+          </ul>
+        </section>
+        <section className="rounded-lg border border-slate-200 bg-white p-4">
+          <h2 className="mb-3 font-semibold">ต้องติดตามวันนี้</h2>
+          {o.followToday.length === 0 && o.stale.length === 0 && <p className="text-sm text-slate-600">ไม่มีลูกค้าค้างติดตาม</p>}
+          <ul className="flex flex-col gap-2">
+            {o.followToday.slice(0, 8).map((l) => <LeadRow key={String(l.id)} l={l} right={`นัด ${l.next_follow_at}`} />)}
+            {o.stale.filter((l) => !o.followToday.includes(l)).slice(0, 8).map((l) => <LeadRow key={String(l.id)} l={l} right={`ค้าง ${S.daysSince(String(l.last_contact_at))} วัน`} />)}
+          </ul>
+        </section>
+        <section className="rounded-lg border border-slate-200 bg-white p-4 lg:col-span-2">
+          <h2 className="mb-3 font-semibold">ลูกค้าตามช่องทาง</h2>
+          {o.byChannel.length === 0 ? <p className="text-sm text-slate-600">ยังไม่มีลูกค้า</p> : (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[480px] text-sm">
+                <thead><tr className="text-right text-slate-600"><th className="p-2 text-left font-medium">ช่องทาง</th><th className="p-2 font-medium">ลูกค้า</th><th className="p-2 font-medium">เข้าชมแล้ว</th><th className="p-2 font-medium">จองขึ้นไป</th><th className="p-2 font-medium">อัตราจอง</th></tr></thead>
+                <tbody>{o.byChannel.map((c) => (
+                  <tr key={c.channel} className="border-t border-slate-200 text-right tabular-nums">
+                    <th scope="row" className="p-2 text-left font-medium">{S.CHANNEL_LABEL[c.channel]}</th>
+                    <td className="p-2">{c.leads}</td><td className="p-2">{c.visited}</td><td className="p-2">{c.booked}</td>
+                    <td className="p-2">{Math.round((c.booked / c.leads) * 100)}%</td>
+                  </tr>
+                ))}</tbody>
+              </table>
+            </div>
+          )}
+          <p className="mt-2 text-xs text-slate-600">ต้นทุนต่อลูกค้าและต่อการจองแยกตามช่องทางจะเพิ่มในระยะ 2 (หน้าการตลาด)</p>
+        </section>
+      </div>
     </ProjectShell>
   );
 }

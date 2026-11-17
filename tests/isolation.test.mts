@@ -13,7 +13,9 @@ const B = tenantDb(db as never, pB.id);
 const a1 = await A.insert("plots", { code: "A01", zone: "A", price: 2390000 });
 const b1 = await B.insert("plots", { code: "A01", zone: "A", price: 3190000 }); // รหัสแปลงซ้ำกันข้ามโครงการได้
 const aL = await A.insert("leads", { name: "คุณวิชัย", phone: "0800000001", channel: "facebook" });
-await B.insert("leads", { name: "คุณนภา", phone: "0800000002", channel: "google" });
+const bL = await B.insert("leads", { name: "คุณนภา", phone: "0800000002", channel: "google" });
+await A.insert("lead_activity", { lead_id: aL.id, kind: "created" });
+await B.insert("lead_activity", { lead_id: bL.id, kind: "created" });
 
 for (const t of Object.keys(TENANT_TABLES) as (keyof typeof TENANT_TABLES)[]) {
   await test(`list(${t}) เห็นเฉพาะข้อมูลโครงการตัวเอง`, async () => {

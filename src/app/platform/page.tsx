@@ -4,6 +4,9 @@ import { projectUrl, requireStaff } from "@/lib/context";
 import { controlDb } from "@/lib/d1";
 import { createProject } from "@/lib/control";
 import { usageSummary } from "@/lib/usage";
+import { rowCountsByProject } from "@/lib/tenant-db";
+import { shardBindings } from "@/lib/backup";
+import type { D1Like } from "@/lib/d1";
 
 export const dynamic = "force-dynamic";
 
@@ -35,6 +38,10 @@ export default async function PlatformPage({ searchParams }: { searchParams: Pro
   const { env, email, staffRole } = await requireStaff();
   const { error } = await searchParams;
   const rows = await usageSummary(controlDb(env));
+  // วัดขนาดข้อมูลต่อโครงการ (จำนวนแถว) จากทุกฐานข้อมูล — ตัวเลขอย่างเดียว ไม่เห็นเนื้อหา
+  const sizes: Record<string, number> = {};
+  for (const b of shardBindings(env)) for (const [k, v] of Object.entries(await rowCountsByProject(env[b] as D1Like))) sizes[k] = (sizes[k] ?? 0) + v;
+  const totalRows = Object.values(sizes).reduce((a, n) => a + n, 0);
   return (
     <main className="mx-auto max-w-5xl p-4 md:p-6">
       <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
@@ -42,12 +49,13 @@ export default async function PlatformPage({ searchParams }: { searchParams: Pro
         <span className="text-sm text-slate-600">{email} · {staffRole}</span>
       </div>
       {error && <p role="alert" className="mb-4 rounded-md bg-red-50 p-3 text-sm text-red-700">{error}</p>}
+      <p className="mb-3 text-sm text-slate-600">ทั้งหมด {rows.length} โครงการ · ข้อมูลรวม {totalRows.toLocaleString("th-TH")} แถว (ฐานข้อมูลหนึ่งก้อนเก็บได้สูงสุด 10 GB ดู docs/OPERATIONS.md เรื่องการแบ่งฐานข้อมูล)</p>
 
       <div className="mb-6 overflow-x-auto rounded-lg border border-slate-200 bg-white">
         <table className="w-full min-w-[720px] text-sm">
           <thead><tr className="text-left text-slate-600">
             <th className="p-3 font-medium">โครงการ</th><th className="p-3 font-medium">ประเภท</th><th className="p-3 font-medium">จังหวัด</th>
-            <th className="p-3 font-medium">ใช้ล่าสุด</th><th className="p-3 text-right font-medium">ผู้ใช้ 7 วัน</th><th className="p-3 text-right font-medium">การใช้งาน 7 วัน</th><th className="p-3 text-right font-medium">สมาชิก</th>
+            <th className="p-3 font-medium">ใช้ล่าสุด</th><th className="p-3 text-right font-medium">ผู้ใช้ 7 วัน</th><th className="p-3 text-right font-medium">การใช้งาน 7 วัน</th><th className="p-3 text-right font-medium">สมาชิก</th><th className="p-3 text-right font-medium">ข้อมูล (แถว)</th>
           </tr></thead>
           <tbody>{rows.map((r) => (
             <tr key={r.id} className="border-t border-slate-200">
@@ -58,6 +66,7 @@ export default async function PlatformPage({ searchParams }: { searchParams: Pro
               <td className="p-3 text-right tabular-nums">{r.users_7d}</td>
               <td className="p-3 text-right tabular-nums">{r.events_7d}</td>
               <td className="p-3 text-right tabular-nums">{r.members}</td>
+              <td className="p-3 text-right tabular-nums">{(sizes[r.id] ?? 0).toLocaleString("th-TH")}</td>
             </tr>
           ))}</tbody>
         </table>

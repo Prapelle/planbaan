@@ -1,0 +1,143 @@
+import Link from "next/link";
+import { revalidatePath } from "next/cache";
+import { Notice, ProjectShell } from "@/components/ProjectShell";
+import { requireProject } from "@/lib/context";
+import { controlDb } from "@/lib/d1";
+import { listMembers } from "@/lib/control";
+import { back, errMsg, fv } from "@/lib/form";
+import { canEditData } from "@/lib/roles";
+import * as S from "@/lib/sales";
+
+export const dynamic = "force-dynamic";
+
+async function guardEdit(target: string) {
+  const ctx = await requireProject({ action: "edit", target });
+  if (!canEditData(ctx.role, ctx.access.supportCanEdit)) back("/leads", { error: "ไม่มีสิทธิ์แก้ไขข้อมูลลูกค้า" });
+  return ctx;
+}
+
+async function createAction(f: FormData) {
+  "use server";
+  const ctx = await guardEdit("/leads");
+  try {
+    await S.createLead(ctx.db, { name: fv(f, "name"), phone: fv(f, "phone"), channel: fv(f, "channel"), plotCode: fv(f, "plot_code"), nextFollowAt: fv(f, "next_follow_at"), note: fv(f, "note") }, ctx.email);
+    await ctx.usage("lead_created", { channel: fv(f, "channel") });
+  } catch (e) { back("/leads", { error: errMsg(e) }); }
+  revalidatePath("/leads");
+  back("/leads", { msg: `เพิ่มลูกค้า ${fv(f, "name")} แล้ว` });
+}
+
+async function moveAction(f: FormData) {
+  "use server";
+  const id = fv(f, "id");
+  const ctx = await guardEdit(`/leads/${id}`);
+  try {
+    await S.moveLead(ctx.db, id, fv(f, "stage"), ctx.email);
+    await ctx.usage("lead_stage_changed", { to: fv(f, "stage") });
+  } catch (e) { back("/leads", { error: errMsg(e) }); }
+  revalidatePath("/leads");
+  back("/leads", {});
+}
+
+export default async function LeadsPage({ searchParams }: { searchParams: Promise<{ q?: string; mine?: string; error?: string; msg?: string }> }) {
+  const ctx = await requireProject({ action: "view", target: "/leads" });
+  await ctx.usage("page_view", { page: "leads" });
+  const { q, mine, error, msg } = await searchParams;
+  const canEdit = canEditData(ctx.role, ctx.access.supportCanEdit);
+  const [all, plots, members] = await Promise.all([
+    ctx.db.list("leads", { limit: 2000, orderBy: "updated_at", desc: true }),
+    ctx.db.list("plots", { limit: 2000 }),
+    listMembers(controlDb(ctx.env), ctx.project.id),
+  ]);
+  plots.sort(S.byCode);
+  const query = (q ?? "").trim().toLowerCase();
+  const leads = all.filter((l) =>
+    (!query || String(l.name).toLowerCase().includes(query) || String(l.phone).includes(query) || String(l.plot_code).toLowerCase() === query) &&
+    (mine !== "1" || l.owner_email === ctx.email));
+  const now = new Date();
+  const nameOf = (email: unknown) => (members.find((m) => m.email === email)?.email ?? String(email)).split("@")[0];
+  const columns = [...S.PIPELINE, "lost" as const];
+
+  return (
+    <ProjectShell ctx={ctx} active="/leads">
+      <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold">ลูกค้า</h1>
+          <p className="text-sm text-slate-600">ทั้งหมด {all.length} ราย · ค้างติดตามเกิน {S.STALE_DAYS} วันมีป้ายสีแดง</p>
+        </div>
+        <form className="flex flex-wrap items-end gap-2 text-sm" role="search">
+          <label className="flex flex-col gap-1">ค้นหา<input name="q" defaultValue={q} placeholder="ชื่อ เบอร์ หรือรหัสแปลง" className="min-h-11 rounded-md border border-slate-300 px-3" /></label>
+          <label className="flex min-h-11 items-center gap-2"><input type="checkbox" name="mine" value="1" defaultChecked={mine === "1"} className="h-5 w-5" /> เฉพาะของฉัน</label>
+          <button className="min-h-11 rounded-md border border-slate-300 px-4 font-medium">กรอง</button>
+        </form>
+      </div>
+      <Notice error={error} msg={msg} />
+
+      {canEdit && (
+        <details className="mb-4 rounded-lg border border-slate-200 bg-white p-4" open={all.length === 0}>
+          <summary className="min-h-11 cursor-pointer content-center font-semibold">+ เพิ่มลูกค้า</summary>
+          <form action={createAction} className="mt-3 grid grid-cols-1 gap-3 text-sm sm:grid-cols-2 lg:grid-cols-3">
+            <label className="flex flex-col gap-1">ชื่อ *<input name="name" required maxLength={120} className="min-h-11 rounded-md border border-slate-300 px-3" /></label>
+            <label className="flex flex-col gap-1">เบอร์โทร<input name="phone" inputMode="tel" className="min-h-11 rounded-md border border-slate-300 px-3" /></label>
+            <label className="flex flex-col gap-1">มาจากช่องทาง
+              <select name="channel" defaultValue="facebook" className="min-h-11 rounded-md border border-slate-300 px-3">
+                {S.CHANNELS.map((c) => <option key={c} value={c}>{S.CHANNEL_LABEL[c]}</option>)}
+              </select>
+            </label>
+            <label className="flex flex-col gap-1">แปลงที่สนใจ
+              <select name="plot_code" defaultValue="" className="min-h-11 rounded-md border border-slate-300 px-3">
+                <option value="">ยังไม่เลือก</option>
+                {plots.map((p) => <option key={p.id} value={String(p.code)}>{String(p.code)} · {S.SALE_LABEL[p.sale_status as S.SaleStatus]}</option>)}
+              </select>
+            </label>
+            <label className="flex flex-col gap-1">นัดติดตามครั้งถัดไป<input name="next_follow_at" type="date" className="min-h-11 rounded-md border border-slate-300 px-3" /></label>
+            <label className="flex flex-col gap-1">หมายเหตุ<input name="note" maxLength={1000} className="min-h-11 rounded-md border border-slate-300 px-3" /></label>
+            <button className="min-h-11 rounded-md bg-brand-600 px-4 font-semibold text-white sm:col-span-2 lg:col-span-1 lg:col-start-3">บันทึกลูกค้า</button>
+          </form>
+        </details>
+      )}
+
+      <div className="overflow-x-auto pb-2">
+        <div className="flex min-w-[1200px] items-start gap-3">
+          {columns.map((stage) => {
+            const cards = leads.filter((l) => l.stage === stage);
+            return (
+              <section key={stage} aria-label={S.STAGE_LABEL[stage]} className="flex min-w-0 flex-1 flex-col gap-2 rounded-lg bg-slate-200/70 p-2">
+                <h2 className="flex justify-between px-1 text-sm font-semibold"><span>{S.STAGE_LABEL[stage]}</span><span className="text-slate-600">{cards.length}</span></h2>
+                {cards.map((l) => {
+                  const stale = S.isStale(l, now);
+                  const prev = S.neighborStage(stage, -1), next = S.neighborStage(stage, 1);
+                  return (
+                    <article key={l.id} className="flex flex-col gap-1 rounded-md border border-slate-200 bg-white p-2 text-sm">
+                      <Link href={`/leads/${l.id}`} className="font-semibold text-slate-900 underline-offset-2 hover:underline">{String(l.name)}</Link>
+                      <span className="text-xs text-slate-600">{S.CHANNEL_LABEL[l.channel as S.Channel] ?? String(l.channel)} · {String(l.plot_code) || "ยังไม่เลือกแปลง"}</span>
+                      <span className="text-xs text-slate-600">ดูแลโดย {nameOf(l.owner_email)}</span>
+                      {stale && <span className="text-xs font-semibold text-red-700">ค้าง {S.daysSince(String(l.last_contact_at), now)} วัน</span>}
+                      {!!l.next_follow_at && !S.isClosed(stage) && <span className="text-xs">นัด {String(l.next_follow_at)}</span>}
+                      {canEdit && (
+                        <div className="mt-1 flex gap-1">
+                          {prev && (
+                            <form action={moveAction} className="flex-1">
+                              <input type="hidden" name="id" value={l.id} /><input type="hidden" name="stage" value={prev} />
+                              <button aria-label={`ย้อนไป ${S.STAGE_LABEL[prev]}`} className="min-h-10 w-full rounded border border-slate-300 text-xs">‹ ย้อน</button>
+                            </form>
+                          )}
+                          {next && (
+                            <form action={moveAction} className="flex-1">
+                              <input type="hidden" name="id" value={l.id} /><input type="hidden" name="stage" value={next} />
+                              <button aria-label={`เลื่อนไป ${S.STAGE_LABEL[next]}`} className="min-h-10 w-full rounded bg-brand-600 text-xs font-semibold text-white">{S.STAGE_LABEL[next]} ›</button>
+                            </form>
+                          )}
+                        </div>
+                      )}
+                    </article>
+                  );
+                })}
+              </section>
+            );
+          })}
+        </div>
+      </div>
+    </ProjectShell>
+  );
+}
