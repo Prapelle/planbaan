@@ -11,19 +11,21 @@ export function makeD1({ migrate = true } = {}) {
   const raw = new DatabaseSync(":memory:");
   if (migrate) for (const f of readdirSync(MIG_DIR).filter((f) => f.endsWith(".sql")).sort()) raw.exec(readFileSync(join(MIG_DIR, f), "utf8"));
   const runSync = (sql, params) => { const r = raw.prepare(sql).run(...params); return { meta: { last_row_id: Number(r.lastInsertRowid), changes: Number(r.changes) } }; };
+  const calls = { n: 0 }; // จำนวนครั้งที่คุยกับฐานข้อมูล (batch นับเป็น 1)
   const stmt = (sql, params = []) => ({
     sql, params,
     bind: (...v) => stmt(sql, v),
-    all: async () => ({ results: raw.prepare(sql).all(...params).map((r) => ({ ...r })) }),
-    first: async () => { const r = raw.prepare(sql).get(...params); return r ? { ...r } : null; },
-    run: async () => runSync(sql, params),
+    all: async () => { calls.n++; return { results: raw.prepare(sql).all(...params).map((r) => ({ ...r })) }; },
+    first: async () => { calls.n++; const r = raw.prepare(sql).get(...params); return r ? { ...r } : null; },
+    run: async () => { calls.n++; return runSync(sql, params); },
     _sync: () => runSync(sql, params),
   });
   const log = [];
   return {
-    raw, log,
+    raw, log, calls,
     prepare: (sql) => { log.push(sql); return stmt(sql); },
     batch: async (stmts) => {
+      calls.n++;
       raw.exec("BEGIN");
       try { const out = stmts.map((s) => s._sync()); raw.exec("COMMIT"); return out; }
       catch (e) { raw.exec("ROLLBACK"); throw e; }

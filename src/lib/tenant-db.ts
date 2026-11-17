@@ -7,7 +7,7 @@
  * 3. ห้ามเขียน SQL ถึงตารางเหล่านี้ที่ไฟล์อื่น — tests/guard.test.mts ตรวจให้
  * เพิ่มตารางใหม่: เพิ่มใน migrations/ แล้วประกาศคอลัมน์ที่นี่
  */
-import { type D1Like, nowIso } from "./d1";
+import { type D1Like, type D1Stmt, nowIso } from "./d1";
 
 export const TENANT_TABLES = {
   plots: ["code", "zone", "house_type", "price", "house_status", "sale_status"],
@@ -43,11 +43,37 @@ function checkCols(t: TenantTable, cols: string[]) {
 }
 const colList = (t: TenantTable) => [...SYSTEM_COLS, ...TENANT_TABLES[t]].map((c) => `"${c}"`).join(", ");
 
+export type BatchOp =
+  | { kind: "insert"; table: TenantTable; data: Record<string, unknown>; id?: string }
+  | { kind: "update"; table: TenantTable; id: string; patch: Record<string, unknown> };
+
 export type ListOpts = { where?: Record<string, string | number>; orderBy?: string; desc?: boolean; limit?: number; offset?: number };
 
 export function tenantDb(db: D1Like, projectId: string) {
   if (!projectId) throw new Error("ต้องระบุ projectId");
   const pid = projectId;
+
+  function buildInsert(table: TenantTable, data: Record<string, unknown>, presetId?: string): { stmt: D1Stmt; row: Row } {
+    const t = checkTable(table);
+    const keys = Object.keys(data);
+    checkCols(t, keys); // project_id / id ส่งมาไม่ได้: ถูกปฏิเสธที่นี่
+    const now = nowIso();
+    const row = { id: presetId ?? crypto.randomUUID(), project_id: pid, created_at: now, updated_at: now, ...data } as Row;
+    const cols = ["id", "project_id", "created_at", "updated_at", ...keys];
+    const stmt = db
+      .prepare(`INSERT INTO "${t}" (${cols.map((c) => `"${c}"`).join(", ")}) VALUES (${cols.map(() => "?").join(", ")})`)
+      .bind(...cols.map((c) => row[c]));
+    return { stmt, row };
+  }
+
+  function buildUpdate(table: TenantTable, id: string, patch: Record<string, unknown>): D1Stmt | null {
+    const t = checkTable(table);
+    const keys = Object.keys(patch);
+    if (!keys.length) return null;
+    checkCols(t, keys);
+    const sets = [...keys.map((c) => `"${c}" = ?`), `"updated_at" = ?`];
+    return db.prepare(`UPDATE "${t}" SET ${sets.join(", ")} WHERE id = ? AND project_id = ?`).bind(...keys.map((k) => patch[k]), nowIso(), id, pid);
+  }
 
   return {
     projectId: pid,
@@ -80,30 +106,31 @@ export function tenantDb(db: D1Like, projectId: string) {
     },
 
     async insert(table: TenantTable, data: Record<string, unknown>): Promise<Row> {
-      const t = checkTable(table);
-      const keys = Object.keys(data);
-      checkCols(t, keys); // project_id / id ส่งมาไม่ได้: ถูกปฏิเสธที่นี่
-      const now = nowIso();
-      const row = { id: crypto.randomUUID(), project_id: pid, created_at: now, updated_at: now, ...data } as Row;
-      const cols = ["id", "project_id", "created_at", "updated_at", ...keys];
-      await db
-        .prepare(`INSERT INTO "${t}" (${cols.map((c) => `"${c}"`).join(", ")}) VALUES (${cols.map(() => "?").join(", ")})`)
-        .bind(...cols.map((c) => row[c]))
-        .run();
+      const { stmt, row } = buildInsert(table, data);
+      await stmt.run();
       return row;
     },
 
     async update(table: TenantTable, id: string, patch: Record<string, unknown>): Promise<boolean> {
-      const t = checkTable(table);
-      const keys = Object.keys(patch);
-      if (!keys.length) return false;
-      checkCols(t, keys);
-      const sets = [...keys.map((c) => `"${c}" = ?`), `"updated_at" = ?`];
-      const r = await db
-        .prepare(`UPDATE "${t}" SET ${sets.join(", ")} WHERE id = ? AND project_id = ?`)
-        .bind(...keys.map((k) => patch[k]), nowIso(), id, pid)
-        .run();
+      const stmt = buildUpdate(table, id, patch);
+      if (!stmt) return false;
+      const r = await stmt.run();
       return r.meta.changes > 0;
+    },
+
+    /**
+     * เขียนหลายรายการในรอบเดียว (D1 batch: ทำทั้งชุดหรือไม่ทำเลย) — ลดเวลารอเมื่อฐานข้อมูลอยู่ไกล
+     * ชุดใหญ่กว่า 50 รายการถูกแบ่งเป็นหลายชุด (แต่ละชุดยังทำทั้งชุดหรือไม่ทำเลย)
+     */
+    async batch(ops: BatchOp[]): Promise<Row[]> {
+      const stmts: D1Stmt[] = [];
+      const rows: Row[] = [];
+      for (const op of ops) {
+        if (op.kind === "insert") { const b = buildInsert(op.table, op.data, op.id); stmts.push(b.stmt); rows.push(b.row); }
+        else { const st = buildUpdate(op.table, op.id, op.patch); if (st) stmts.push(st); }
+      }
+      for (let i = 0; i < stmts.length; i += 50) await db.batch(stmts.slice(i, i + 50));
+      return rows;
     },
 
     async remove(table: TenantTable, id: string): Promise<boolean> {

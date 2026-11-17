@@ -122,4 +122,23 @@ await test("ขั้นถัดไป/ก่อนหน้า", async () => {
   assert.equal(S.neighborStage("lost", -1), "new");
 });
 
+await test("คุยกับฐานข้อมูลไม่กี่รอบ (กันช้าเมื่อฐานข้อมูลอยู่ไกล)", async () => {
+  const c = (raw as unknown as { calls: { n: number } }).calls;
+  const rounds = async (fn: () => Promise<unknown>) => { const s0 = c.n; await fn(); return c.n - s0; };
+  assert.ok(await rounds(() => S.createPlotsBulk(db, { zone: "C", count: 40 })) <= 2, "เพิ่ม 40 แปลง");
+  const l = await S.createLead(db, { name: "คุณรอบ", plotCode: "C01" }, "s@x.com");
+  assert.ok(await rounds(() => S.createLead(db, { name: "คุณรอบสอง", plotCode: "C02" }, "s@x.com")) <= 3, "เพิ่มลูกค้า");
+  assert.ok(await rounds(() => S.moveLead(db, l.id, "contacted", "s@x.com")) <= 4, "เลื่อนขั้น");
+  assert.ok(await rounds(() => S.updateLead(db, l.id, { plotCode: "C03" }, "s@x.com")) <= 6, "ย้ายแปลง");
+  assert.ok(await rounds(() => S.logContact(db, l.id, "โทรแล้ว", "s@x.com")) <= 2, "บันทึกการติดต่อ");
+});
+
+await test("เขียนเป็นชุดยังผูกโครงการ และอ้าง id ข้ามโครงการไม่ได้", async () => {
+  const [r] = await other.batch([{ kind: "insert", table: "plots", data: { code: "Z1" } }]);
+  assert.equal(r.project_id, q.id);
+  await other.batch([{ kind: "update", table: "leads", id: b.id, patch: { name: "แฮ็ก" } }]);
+  assert.notEqual((await db.get("leads", b.id))?.name, "แฮ็ก");
+  await rejects(other.batch([{ kind: "insert", table: "plots", data: { code: "Z2", project_id: p.id } }]), /project_id/);
+});
+
 console.log("sales: ผ่าน");

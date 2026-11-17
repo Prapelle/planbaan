@@ -2,7 +2,7 @@
  * กติกาการขาย (ระยะ 1): ผังแปลง ลูกค้า การเลื่อนขั้น และตัวเลขภาพรวม
  * ทุกฟังก์ชันรับ TenantDb ที่ผูกโครงการแล้ว จึงทำงานได้เฉพาะในโครงการนั้น
  */
-import type { TenantDb } from "./tenant-db";
+import type { BatchOp, TenantDb } from "./tenant-db";
 
 // ── ค่ามาตรฐาน (ไม่ให้แต่ละโครงการปรับเอง) ──
 export const STAGES = ["new", "contacted", "visit_scheduled", "visited", "booked", "loan", "transferred", "lost"] as const;
@@ -56,14 +56,16 @@ export async function createPlotsBulk(db: TenantDb, p: { zone: string; count: nu
   const price = Math.max(0, Math.round(Number(p.price ?? 0)));
   const houseType = cleanText(p.houseType, 80);
   const existing = new Set((await db.list("plots", { limit: 2000 })).map((r) => String(r.code)));
-  let created = 0, skipped = 0;
+  let skipped = 0;
   const width = Math.max(2, String(start + count - 1).length);
+  const ops: BatchOp[] = [];
   for (let i = 0; i < count; i++) {
     const code = zone + String(start + i).padStart(width, "0");
     if (existing.has(code)) { skipped++; continue; }
-    await db.insert("plots", { code, zone, house_type: houseType, price, house_status: "not_started", sale_status: "available" });
-    created++;
+    ops.push({ kind: "insert", table: "plots", data: { code, zone, house_type: houseType, price, house_status: "not_started", sale_status: "available" } });
   }
+  await db.batch(ops); // เขียนทั้งโซนในรอบเดียว
+  const created = ops.length;
   return { created, skipped };
 }
 
@@ -117,15 +119,43 @@ export async function recomputePlot(db: TenantDb, code: string) {
 // ── ลูกค้า ──
 export type LeadInput = { name?: string; phone?: string; channel?: string; plotCode?: string; ownerEmail?: string; nextFollowAt?: string; note?: string; stage?: string };
 
-async function checkPlot(db: TenantDb, code: string, stage: string, leadId?: string) {
-  if (!code) return;
-  if (!(await getPlotByCode(db, code))) throw new Error(`ไม่พบแปลง ${code}`);
-  if (stageIdx(stage) >= BOOKED_IDX && (await activeBuyer(db, code, leadId))) throw new Error(`แปลง ${code} มีลูกค้าจองแล้ว`);
+const SOLD = new Set(["booked", "loan", "transferred"]);
+type PlotState = { plot: Record<string, unknown> | null; buyer: Record<string, unknown> | null };
+
+/** แปลง + ลูกค้าที่ถือแปลงอยู่ (ยกเว้นรายที่กำลังแก้) อ่านพร้อมกันในรอบเดียว */
+async function plotState(db: TenantDb, code: string, exceptLeadId?: string): Promise<PlotState> {
+  if (!code) return { plot: null, buyer: null };
+  const [plots, leads] = await Promise.all([
+    db.list("plots", { where: { code }, limit: 1 }),
+    db.list("leads", { where: { plot_code: code }, limit: 2000 }),
+  ]);
+  const buyer = leads.find((l) => l.id !== exceptLeadId && stageIdx(String(l.stage)) >= BOOKED_IDX) ?? null;
+  return { plot: plots[0] ?? null, buyer };
 }
 
-async function activity(db: TenantDb, leadId: string, kind: string, actor: string, extra: { from?: string; to?: string; note?: string } = {}) {
-  await db.insert("lead_activity", { lead_id: leadId, kind, from_stage: extra.from ?? "", to_stage: extra.to ?? "", note: cleanText(extra.note, 1000), actor });
+/** สถานะขายของแปลงหลังเปลี่ยน: ลูกค้ารายนี้อยู่ขั้นไหน + มีผู้ถือแปลงรายอื่นหรือไม่ */
+function plotUpdate(st: PlotState, myStage: string | null): BatchOp | null {
+  if (!st.plot) return null;
+  const cur = String(st.plot.sale_status);
+  let next = cur;
+  if (myStage && stageIdx(myStage) >= BOOKED_IDX) next = myStage;
+  else if (st.buyer) next = String(st.buyer.stage);
+  else if (SOLD.has(cur)) next = "available";
+  return next === cur ? null : { kind: "update", table: "plots", id: String(st.plot.id), patch: { sale_status: next } };
 }
+
+function checkPlotState(code: string, st: PlotState, stage: string) {
+  if (!code) return;
+  if (!st.plot) throw new Error(`ไม่พบแปลง ${code}`);
+  if (stageIdx(stage) >= BOOKED_IDX && st.buyer) throw new Error(`แปลง ${code} มีลูกค้าจองแล้ว`);
+}
+
+const activityOp = (leadId: string, kind: string, actor: string, extra: { from?: string; to?: string; note?: string } = {}): BatchOp => ({
+  kind: "insert", table: "lead_activity", data: { lead_id: leadId, kind, from_stage: extra.from ?? "", to_stage: extra.to ?? "", note: cleanText(extra.note, 1000), actor },
+});
+const keep = (ops: (BatchOp | null)[]) => ops.filter((o): o is BatchOp => o !== null);
+
+// แต่ละคำสั่งด้านล่างคุยกับฐานข้อมูลไม่เกิน 3 รอบ: อ่านลูกค้า → อ่านแปลง (พร้อมกัน) → เขียนทั้งหมดในรอบเดียว
 
 export async function createLead(db: TenantDb, input: LeadInput, actor: string) {
   const name = cleanText(input.name, 120);
@@ -134,13 +164,17 @@ export async function createLead(db: TenantDb, input: LeadInput, actor: string) 
   const stage = one(STAGES, input.stage || "new", "ขั้น");
   const plot = input.plotCode ? cleanCode(input.plotCode) : "";
   if (plot && !CODE_OK.test(plot)) throw new Error("รหัสแปลงไม่ถูกต้อง");
-  await checkPlot(db, plot, stage);
-  const row = await db.insert("leads", {
-    name, phone: cleanPhone(input.phone), channel, stage, plot_code: plot, owner_email: cleanText(input.ownerEmail || actor, 200).toLowerCase(),
-    last_contact_at: new Date().toISOString(), note: cleanText(input.note, 1000), next_follow_at: cleanDate(input.nextFollowAt),
-  });
-  await activity(db, row.id, "created", actor, { to: stage });
-  await recomputePlot(db, plot);
+  const st = await plotState(db, plot);
+  checkPlotState(plot, st, stage);
+  const id = crypto.randomUUID();
+  const [row] = await db.batch(keep([
+    { kind: "insert", table: "leads", id, data: {
+      name, phone: cleanPhone(input.phone), channel, stage, plot_code: plot, owner_email: cleanText(input.ownerEmail || actor, 200).toLowerCase(),
+      last_contact_at: new Date().toISOString(), note: cleanText(input.note, 1000), next_follow_at: cleanDate(input.nextFollowAt),
+    } },
+    activityOp(id, "created", actor, { to: stage }),
+    plotUpdate(st, stage),
+  ]));
   return row;
 }
 
@@ -155,15 +189,20 @@ export async function updateLead(db: TenantDb, id: string, input: LeadInput, act
   if (input.nextFollowAt !== undefined) patch.next_follow_at = cleanDate(input.nextFollowAt);
   if (input.note !== undefined) patch.note = cleanText(input.note, 1000);
   const oldPlot = String(lead.plot_code);
+  const stage = String(lead.stage);
+  const ops: (BatchOp | null)[] = [];
   if (input.plotCode !== undefined) {
     const plot = input.plotCode ? cleanCode(input.plotCode) : "";
     if (plot && !CODE_OK.test(plot)) throw new Error("รหัสแปลงไม่ถูกต้อง");
-    if (plot !== oldPlot) { await checkPlot(db, plot, String(lead.stage), id); patch.plot_code = plot; }
+    if (plot !== oldPlot) {
+      const [oldSt, newSt] = await Promise.all([plotState(db, oldPlot, id), plotState(db, plot, id)]);
+      checkPlotState(plot, newSt, stage);
+      patch.plot_code = plot;
+      ops.push(plotUpdate(oldSt, null), plotUpdate(newSt, stage));
+    }
   }
   if (!Object.keys(patch).length) return;
-  await db.update("leads", id, patch);
-  await activity(db, id, "edit", actor);
-  if (patch.plot_code !== undefined) { await recomputePlot(db, oldPlot); await recomputePlot(db, String(patch.plot_code)); }
+  await db.batch(keep([{ kind: "update", table: "leads", id, patch }, activityOp(id, "edit", actor), ...ops]));
 }
 
 export async function moveLead(db: TenantDb, id: string, stageRaw: string, actor: string) {
@@ -174,10 +213,13 @@ export async function moveLead(db: TenantDb, id: string, stageRaw: string, actor
   if (stage === from) return;
   const plot = String(lead.plot_code);
   if (stageIdx(stage) >= BOOKED_IDX && !plot) throw new Error("เลือกแปลงให้ลูกค้าก่อนเลื่อนไปขั้นจอง");
-  await checkPlot(db, plot, stage, id);
-  await db.update("leads", id, { stage, last_contact_at: new Date().toISOString() });
-  await activity(db, id, "stage", actor, { from, to: stage });
-  await recomputePlot(db, plot);
+  const st = await plotState(db, plot, id);
+  checkPlotState(plot, st, stage);
+  await db.batch(keep([
+    { kind: "update", table: "leads", id, patch: { stage, last_contact_at: new Date().toISOString() } },
+    activityOp(id, "stage", actor, { from, to: stage }),
+    plotUpdate(st, stage),
+  ]));
 }
 
 /** เลื่อนไปขั้นถัดไป/ก่อนหน้าในเส้นทางขาย */
@@ -189,14 +231,13 @@ export function neighborStage(stage: string, dir: 1 | -1): Stage | null {
 }
 
 export async function logContact(db: TenantDb, id: string, note: string, actor: string, nextFollowAt?: string) {
-  const lead = await db.get("leads", id);
-  if (!lead) throw new Error("ไม่พบลูกค้ารายนี้");
   const n = cleanText(note, 1000);
   if (!n) throw new Error("ใส่บันทึกการติดต่อ");
+  const lead = await db.get("leads", id);
+  if (!lead) throw new Error("ไม่พบลูกค้ารายนี้");
   const patch: Record<string, unknown> = { last_contact_at: new Date().toISOString() };
   if (nextFollowAt !== undefined) patch.next_follow_at = cleanDate(nextFollowAt);
-  await db.update("leads", id, patch);
-  await activity(db, id, "contact", actor, { note: n });
+  await db.batch([{ kind: "update", table: "leads", id, patch }, activityOp(id, "contact", actor, { note: n })]);
 }
 
 export async function leadHistory(db: TenantDb, id: string) {
