@@ -54,7 +54,7 @@ async function contactAction(f: FormData) {
 }
 
 const when = (iso: unknown) => new Date(String(iso)).toLocaleString("th-TH", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Bangkok" });
-const KIND: Record<string, string> = { created: "เพิ่มลูกค้า", stage: "เปลี่ยนขั้น", contact: "ติดต่อ", edit: "แก้ไขข้อมูล" };
+const KIND: Record<string, string> = { created: "เพิ่มลูกค้า", stage: "เปลี่ยนขั้น", contact: "ติดต่อ", edit: "แก้ไขข้อมูล", loan: "สินเชื่อ" };
 
 export default async function LeadPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ error?: string; msg?: string }> }) {
   const { id } = await params;
@@ -77,7 +77,8 @@ export default async function LeadPage({ params, searchParams }: { params: Promi
       <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
         <h1 className="text-2xl font-bold">{String(lead.name)}</h1>
         <span className="text-sm">ขั้น <b>{S.STAGE_LABEL[stage]}</b>{lead.plot_code ? <> · แปลง <Link href={`/plots?plot=${lead.plot_code}`} className="text-brand-700 underline">{String(lead.plot_code)}</Link></> : null}
-          {stale && <span className="ml-2 font-semibold text-red-700">ค้าง {S.daysSince(String(lead.last_contact_at))} วัน</span>}</span>
+          {stale && <span className="ml-2 font-semibold text-red-700">ค้าง {S.daysSince(String(lead.last_contact_at))} วัน</span>}
+          {(stage === "booked" || stage === "loan") && <Link href={`/loans?lead=${id}`} className="ml-3 font-semibold text-brand-700 underline">ดูสินเชื่อ</Link>}</span>
       </div>
       <Notice error={error} msg={msg} />
 

@@ -16,6 +16,8 @@ const aL = await A.insert("leads", { name: "คุณวิชัย", phone: "0
 const bL = await B.insert("leads", { name: "คุณนภา", phone: "0800000002", channel: "google" });
 await A.insert("lead_activity", { lead_id: aL.id, kind: "created" });
 await B.insert("lead_activity", { lead_id: bL.id, kind: "created" });
+await A.insert("loan_apps", { lead_id: aL.id, bank: "ออมสิน" });
+await B.insert("loan_apps", { lead_id: bL.id, bank: "ออมสิน" });
 
 for (const t of Object.keys(TENANT_TABLES) as (keyof typeof TENANT_TABLES)[]) {
   await test(`list(${t}) เห็นเฉพาะข้อมูลโครงการตัวเอง`, async () => {

@@ -23,3 +23,6 @@ export const canGrantSupport = (r: AccessRole) => r === "owner" || r === "manage
 export const canManagePlots = (r: AccessRole, supportCanEdit = false) => r === "owner" || r === "manager" || (r === "support" && supportCanEdit);
 export const canEditData =(r: AccessRole, supportCanEdit = false) =>
   r === "owner" || r === "manager" || r === "sales" || (r === "support" && supportCanEdit);
+
+/** ส่งออกข้อมูลทั้งโครงการ (มีข้อมูลส่วนบุคคลของลูกค้า) */
+export const canExport = (r: AccessRole) => r === "owner" || r === "manager";

@@ -1,0 +1,43 @@
+import { NextResponse, type NextRequest } from "next/server";
+import { requireProject } from "@/lib/context";
+import { canExport } from "@/lib/roles";
+import { TENANT_TABLES, type TenantTable } from "@/lib/tenant-db";
+
+export const dynamic = "force-dynamic";
+
+/** ช่องที่ขึ้นต้นด้วย = + - @ ใส่ ' นำหน้า กันสูตรทำงานเองตอนเปิดใน Excel */
+const cell = (v: unknown) => {
+  let s = v === null || v === undefined ? "" : String(v);
+  if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`;
+  return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+};
+
+export async function GET(req: NextRequest) {
+  const table = req.nextUrl.searchParams.get("table") ?? "";
+  const format = req.nextUrl.searchParams.get("format") ?? "csv";
+  const ctx = await requireProject({ action: "export", target: table || format });
+  if (!canExport(ctx.role)) return new NextResponse("Forbidden", { status: 403 });
+  const stamp = new Date().toISOString().slice(0, 10);
+  const name = `${ctx.project.slug}-${table || "all"}-${stamp}`;
+  await ctx.usage("export", { table: table || "all" });
+
+  if (format === "json") {
+    const data = await ctx.db.exportAll();
+    return new NextResponse(JSON.stringify({ project: { slug: ctx.project.slug, name: ctx.project.name }, exported_at: new Date().toISOString(), data }, null, 2), {
+      headers: { "Content-Type": "application/json; charset=utf-8", "Content-Disposition": `attachment; filename="${name}.json"`, "Cache-Control": "no-store" },
+    });
+  }
+  if (!Object.prototype.hasOwnProperty.call(TENANT_TABLES, table)) return new NextResponse("ไม่รู้จักตาราง", { status: 400 });
+  const t = table as TenantTable;
+  const cols = ["id", ...TENANT_TABLES[t], "created_at", "updated_at"];
+  const rows: Record<string, unknown>[] = [];
+  for (let off = 0; ; off += 2000) {
+    const page = await ctx.db.list(t, { limit: 2000, offset: off });
+    rows.push(...page);
+    if (page.length < 2000) break;
+  }
+  const csv = "﻿" + [cols.join(","), ...rows.map((r) => cols.map((c) => cell(r[c])).join(","))].join("\r\n");
+  return new NextResponse(csv, {
+    headers: { "Content-Type": "text/csv; charset=utf-8", "Content-Disposition": `attachment; filename="${name}.csv"`, "Cache-Control": "no-store" },
+  });
+}

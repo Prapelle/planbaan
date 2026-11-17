@@ -7,6 +7,7 @@ import { listMembers } from "@/lib/control";
 import { back, errMsg, fv } from "@/lib/form";
 import { canEditData } from "@/lib/roles";
 import * as S from "@/lib/sales";
+import * as L from "@/lib/loans";
 
 export const dynamic = "force-dynamic";
 
@@ -44,10 +45,11 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
   await ctx.usage("page_view", { page: "leads" });
   const { q, mine, error, msg } = await searchParams;
   const canEdit = canEditData(ctx.role, ctx.access.supportCanEdit);
-  const [all, plots, members] = await Promise.all([
+  const [all, plots, members, apps] = await Promise.all([
     ctx.db.list("leads", { limit: 2000, orderBy: "updated_at", desc: true }),
     ctx.db.list("plots", { limit: 2000 }),
     listMembers(controlDb(ctx.env), ctx.project.id),
+    ctx.db.list("loan_apps", { limit: 2000 }),
   ]);
   plots.sort(S.byCode);
   const query = (q ?? "").trim().toLowerCase();
@@ -114,6 +116,12 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
                       <span className="text-xs text-slate-600">ดูแลโดย {nameOf(l.owner_email)}</span>
                       {stale && <span className="text-xs font-semibold text-red-700">ค้าง {S.daysSince(String(l.last_contact_at), now)} วัน</span>}
                       {!!l.next_follow_at && !S.isClosed(stage) && <span className="text-xs">นัด {String(l.next_follow_at)}</span>}
+                      {stage === "loan" && (() => {
+                        const sum = L.summarize(l, apps.filter((a) => a.lead_id === l.id), now);
+                        return <Link href={`/loans?lead=${l.id}`} className={`text-xs font-semibold underline ${sum.allRejected ? "text-red-700" : "text-slate-800"}`}>
+                          {sum.allRejected ? "ไม่ผ่านทุกธนาคาร · แก้หนี้" : `ยื่น ${sum.filed} · อนุมัติ ${sum.approved} · รอผล ${sum.waiting}`}
+                        </Link>;
+                      })()}
                       {canEdit && (
                         <div className="mt-1 flex gap-1">
                           {prev && (
