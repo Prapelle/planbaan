@@ -171,6 +171,7 @@ export async function createLead(db: TenantDb, input: LeadInput, actor: string) 
     { kind: "insert", table: "leads", id, data: {
       name, phone: cleanPhone(input.phone), channel, stage, plot_code: plot, owner_email: cleanText(input.ownerEmail || actor, 200).toLowerCase(),
       last_contact_at: new Date().toISOString(), note: cleanText(input.note, 1000), next_follow_at: cleanDate(input.nextFollowAt),
+      max_stage: Math.max(0, stageIdx(stage)),
     } },
     activityOp(id, "created", actor, { to: stage }),
     plotUpdate(st, stage),
@@ -216,7 +217,7 @@ export async function moveLead(db: TenantDb, id: string, stageRaw: string, actor
   const st = await plotState(db, plot, id);
   checkPlotState(plot, st, stage);
   await db.batch(keep([
-    { kind: "update", table: "leads", id, patch: { stage, last_contact_at: new Date().toISOString() } },
+    { kind: "update", table: "leads", id, patch: { stage, last_contact_at: new Date().toISOString(), max_stage: Math.max(Number(lead.max_stage ?? 0), stageIdx(stage)) } },
     activityOp(id, "stage", actor, { from, to: stage }),
     plotUpdate(st, stage),
   ]));

@@ -17,6 +17,10 @@ const bL = await B.insert("leads", { name: "คุณนภา", phone: "0800000
 await A.insert("lead_activity", { lead_id: aL.id, kind: "created" });
 await B.insert("lead_activity", { lead_id: bL.id, kind: "created" });
 await A.insert("loan_apps", { lead_id: aL.id, bank: "ออมสิน" });
+await A.insert("marketing_spend", { day: "2026-11-01", month: "2026-11", channel: "facebook", amount: 1 });
+await B.insert("marketing_spend", { day: "2026-11-01", month: "2026-11", channel: "facebook", amount: 2 });
+await A.insert("marketing_budget", { month: "2026-11", channel: "facebook", amount: 1 });
+await B.insert("marketing_budget", { month: "2026-11", channel: "facebook", amount: 2 });
 await B.insert("loan_apps", { lead_id: bL.id, bank: "ออมสิน" });
 
 for (const t of Object.keys(TENANT_TABLES) as (keyof typeof TENANT_TABLES)[]) {

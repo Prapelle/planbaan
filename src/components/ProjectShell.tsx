@@ -9,6 +9,7 @@ export function ProjectShell({ ctx, active, children }: { ctx: ProjectCtx; activ
     { href: "/plots", label: "ผังแปลง", show: true },
     { href: "/leads", label: "ลูกค้า", show: true },
     { href: "/loans", label: "สินเชื่อ", show: true },
+    { href: "/marketing", label: "การตลาด", show: true },
     { href: "/export", label: "ส่งออกข้อมูล", show: canExport(ctx.role) },
     { href: "/members", label: "ผู้ใช้ในโครงการ", show: canManageMembers(ctx.role) },
     { href: "/support", label: "สิทธิ์ทีมช่วยเหลือ", show: canGrantSupport(ctx.role) },

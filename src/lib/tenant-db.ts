@@ -12,9 +12,11 @@ import { type D1Like, type D1Stmt, nowIso } from "./d1";
 export const TENANT_TABLES = {
   plots: ["code", "zone", "house_type", "price", "house_status", "sale_status"],
   leads: ["name", "phone", "channel", "stage", "plot_code", "owner_email", "last_contact_at", "note", "next_follow_at",
-    "loan_docs", "debt_reason", "debt_plan", "debt_retry_at", "debt_since"],
+    "loan_docs", "debt_reason", "debt_plan", "debt_retry_at", "debt_since", "max_stage"],
   lead_activity: ["lead_id", "kind", "from_stage", "to_stage", "note", "actor"],
   loan_apps: ["lead_id", "bank", "status", "amount", "officer", "note"],
+  marketing_spend: ["day", "month", "channel", "campaign", "amount", "source"],
+  marketing_budget: ["month", "channel", "amount"],
 } as const;
 
 /**

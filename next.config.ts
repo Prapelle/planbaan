@@ -4,6 +4,8 @@ import { initOpenNextCloudflareForDev } from "@opennextjs/cloudflare";
 initOpenNextCloudflareForDev();
 
 const nextConfig: NextConfig = {
+  // นำเข้าไฟล์ CSV โฆษณา (หน้า /marketing จำกัดไฟล์ไว้ 3MB)
+  experimental: { serverActions: { bodySizeLimit: "4mb" } },
   async headers() {
     return [{
       source: "/:path*",

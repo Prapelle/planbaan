@@ -7,5 +7,6 @@ echo "== guard (ไม่มี SQL ถึงตารางโครงกา�
 echo "== access (สมาชิก / สิทธิ์ทีมช่วยเหลือ)"; npx tsx tests/access.test.mts
 echo "== sales (ผังแปลง ลูกค้า ภาพรวม)"; npx tsx tests/sales.test.mts
 echo "== loans (สินเชื่อ)"; npx tsx tests/loans.test.mts
+echo "== marketing (การตลาด)"; npx tsx tests/marketing.test.mts
 echo "== host / usage / backup"; npx tsx tests/host-usage-backup.test.mts
 echo "ทุกเทสต์ผ่าน"
