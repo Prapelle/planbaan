@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { isAllowedRedirect } from "@/lib/host";
 import { auth, signIn } from "@/auth";
 import { cfg, where } from "@/lib/context";
+import { LegalLinks } from "@/components/LegalPage";
 
 export const dynamic = "force-dynamic";
 
@@ -31,6 +32,8 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
       <form action={async () => { "use server"; await signIn("google", { redirectTo: next }); }}>
         <button className="flex min-h-12 w-full items-center justify-center rounded-md bg-brand-600 px-4 font-semibold text-white hover:bg-brand-700">เข้าสู่ระบบด้วย Google</button>
       </form>
+      <p className="text-xs text-slate-600">ระบบใช้เฉพาะชื่อ อีเมล และรูปโปรไฟล์จากบัญชี Google เพื่อเข้าสู่ระบบ</p>
+      <LegalLinks />
     </main>
   );
 }

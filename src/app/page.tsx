@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ProjectShell } from "@/components/ProjectShell";
+import { LegalLinks } from "@/components/LegalPage";
 import { cfg, projectUrl, requireProject, sessionEmail, where } from "@/lib/context";
 import { controlDb, getEnv } from "@/lib/d1";
 import { getStaffRole, projectsOfEmail } from "@/lib/control";
@@ -22,6 +23,7 @@ export default async function Home() {
         <h1 className="text-2xl font-bold">PlanBaan แผนบ้าน</h1>
         <p className="text-slate-600">ระบบติดตามการตลาดและการขายสำหรับเจ้าของโครงการบ้าน</p>
         <Link href="/login" className="flex min-h-11 items-center justify-center rounded-md bg-brand-600 px-4 font-semibold text-white">เข้าสู่ระบบ</Link>
+        <LegalLinks />
       </main>
     );
   }
