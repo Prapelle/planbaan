@@ -1,0 +1,28 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "planbaan",
+  // worker.ts ห่อ worker ของ OpenNext เพื่อเพิ่มงานตามเวลา (สำรองข้อมูลรายวัน)
+  "main": "worker.ts",
+  "compatibility_date": "2026-10-15",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "observability": { "enabled": true, "head_sampling_rate": 1 },
+  // ฐานข้อมูลหลัก: เก็บตารางระบบ (projects, memberships ฯลฯ) และข้อมูลโครงการกลุ่มแรก
+  // เมื่อต้องแบ่งฐานข้อมูล ให้เพิ่ม binding ใหม่ เช่น DB_2 แล้วตั้ง projects.shard = 'DB_2' ให้โครงการที่ย้าย
+  "d1_databases": [
+    { "binding": "DB", "database_name": "planbaan-db", "database_id": "REPLACE_WITH_D1_ID", "migrations_dir": "migrations" }
+  ],
+  // ที่เก็บไฟล์สำรองรายวัน (และรูปในระยะถัดไป)
+  "r2_buckets": [{ "binding": "BACKUPS", "bucket_name": "planbaan-backups" }],
+  // สำรองข้อมูลทุกวันเวลา 03:00 น. ไทย (20:00 UTC)
+  "triggers": { "crons": ["0 20 * * *"] },
+  "assets": { "directory": ".open-next/assets", "binding": "ASSETS" },
+  // ค่าที่ไม่ลับตั้งตรงนี้ ค่าลับ (AUTH_SECRET, AUTH_GOOGLE_ID, AUTH_GOOGLE_SECRET, USAGE_SALT) ใช้ `wrangler secret put` หรือหน้า Settings ของ Worker
+  "vars": {
+    "AUTH_TRUST_HOST": "true",
+    // โดเมนหลัก เช่น planbaan.app (ยังไม่ได้เลือก) — โครงการใช้ <slug>.<BASE_DOMAIN>
+    "BASE_DOMAIN": "",
+    // เปิดไว้ระหว่างยังไม่มีโดเมน: เลือกโครงการผ่าน /api/dev/project?slug=<slug> บนโดเมน workers.dev
+    "ALLOW_PROJECT_SWITCH": "true",
+    "BACKUP_RETENTION_DAYS": "30"
+  }
+}

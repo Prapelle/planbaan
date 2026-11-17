@@ -1,0 +1,33 @@
+# การดูแลระบบ
+
+## การสำรองข้อมูล
+
+| ชั้น | ทำอะไร | เก็บนาน |
+|---|---|---|
+| D1 Time Travel | ในตัวของ Cloudflare ย้อนฐานข้อมูลไปจุดเวลาใดก็ได้ | ตามแผน Workers Paid |
+| ส่งออกรายวันไป R2 | cron 03:00 น. ส่งออกทุกตารางเป็น `backups/YYYY-MM-DD/<binding>/<table>.ndjson.gz` | 30 วัน (`BACKUP_RETENTION_DAYS`) |
+| NAS | ยังไม่ทำ (ระยะ 4) ต้องเข้ารหัสก่อนออกจาก Cloudflare | - |
+
+ตรวจว่าสำรองสำเร็จ: Workers → planbaan → Logs ค้นคำว่า `backup ok` หรือดูไฟล์ `_manifest.json` ใน R2
+
+## กู้คืน
+
+**ผิดพลาดไม่นาน (ลบผิด แก้ผิด):** ใช้ Time Travel
+
+```bash
+npx wrangler d1 time-travel info planbaan-db --timestamp "2026-11-17T10:00:00+07:00"
+npx wrangler d1 time-travel restore planbaan-db --timestamp "2026-11-17T10:00:00+07:00"
+```
+
+การ restore ย้อนทั้งฐานข้อมูล ทุกโครงการในก้อนเดียวกันย้อนด้วย ถ้าต้องการกู้เฉพาะโครงการเดียว ให้ใช้ไฟล์จาก R2 แล้วนำเข้าเฉพาะแถวที่ `project_id` ตรงกัน
+
+**ไฟล์จาก R2:** ดาวน์โหลดไฟล์ `.ndjson.gz` แต่ละบรรทัดคือหนึ่งแถว (JSON)
+
+## แบ่งฐานข้อมูล (เมื่อใกล้ 10 GB)
+
+1. สร้าง D1 ใหม่ เช่น `planbaan-db-2` แล้วเพิ่ม binding `DB_2` ใน `wrangler.jsonc` (ใส่ `migrations_dir` เดียวกัน)
+2. รัน migrations กับฐานใหม่
+3. คัดลอกแถวของโครงการที่จะย้ายไปฐานใหม่ ตรวจจำนวนแถวตรงกัน
+4. ตั้ง `projects.shard = 'DB_2'` ให้โครงการนั้น แล้วลบแถวเก่าจาก `DB`
+
+ตารางระบบ (projects, memberships ฯลฯ) อยู่ที่ `DB` เสมอ

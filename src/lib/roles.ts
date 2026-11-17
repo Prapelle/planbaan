@@ -1,0 +1,23 @@
+/**
+ * บทบาทในโครงการ (ระยะ 0)
+ * - owner: เจ้าของโครงการ ทำได้ทุกอย่าง จัดการผู้ใช้ เปิดสิทธิ์ทีมช่วยเหลือ
+ * - manager: ผู้จัดการ แก้ข้อมูลได้ เปิดสิทธิ์ทีมช่วยเหลือได้ แต่จัดการผู้ใช้ไม่ได้
+ * - sales: ฝ่ายขาย แก้ข้อมูลลูกค้าและแปลงได้
+ * - marketing: การตลาด ดูอย่างเดียว (ระยะ 2 จะแก้ข้อมูลการตลาดได้)
+ * - viewer: ดูอย่างเดียว
+ * - support: ทีม PlanBaan ที่ลูกค้าเปิดสิทธิ์ให้ชั่วคราว (ไม่ได้เก็บใน memberships)
+ */
+export type ProjectRole = "owner" | "manager" | "sales" | "marketing" | "viewer";
+export type AccessRole = ProjectRole | "support";
+export const PROJECT_ROLES: ProjectRole[] = ["owner", "manager", "sales", "marketing", "viewer"];
+export const ROLE_LABEL: Record<AccessRole, string> = {
+  owner: "เจ้าของโครงการ", manager: "ผู้จัดการ", sales: "ฝ่ายขาย", marketing: "การตลาด", viewer: "ดูอย่างเดียว", support: "ทีมช่วยเหลือ PlanBaan",
+};
+export const normRole = (v: unknown): ProjectRole | null => {
+  const r = String(v ?? "").trim().toLowerCase();
+  return (PROJECT_ROLES as string[]).includes(r) ? (r as ProjectRole) : null;
+};
+export const canManageMembers = (r: AccessRole) => r === "owner";
+export const canGrantSupport = (r: AccessRole) => r === "owner" || r === "manager";
+export const canEditData = (r: AccessRole, supportCanEdit = false) =>
+  r === "owner" || r === "manager" || r === "sales" || (r === "support" && supportCanEdit);

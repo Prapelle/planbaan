@@ -1,0 +1,121 @@
+/**
+ * ตารางระบบ (control) — โครงการ, สมาชิก, ทีม PlanBaan, สิทธิ์ทีมช่วยเหลือ, บันทึกการเข้าถึง
+ * ไฟล์นี้ห้ามแตะตารางข้อมูลโครงการ (plots, leads, ...) — ใช้ tenant-db.ts
+ */
+import { type D1Like, SHARD_OK, nowIso } from "./d1";
+import { isValidSlug } from "./host";
+import { type ProjectRole, normRole } from "./roles";
+
+export type Project = { id: string; slug: string; name: string; kind: string; province: string; shard: string; status: string; created_at: string };
+export type SupportGrant = { id: string; project_id: string; granted_by: string; can_edit: number; reason: string; expires_at: string; revoked_at: string | null; created_at: string };
+
+const normEmail = (e: string) => e.trim().toLowerCase();
+const EMAIL_OK = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+// ── โครงการ ──
+export async function getProjectBySlug(db: D1Like, slug: string): Promise<Project | null> {
+  return db.prepare(`SELECT * FROM projects WHERE slug = ?`).bind(slug.toLowerCase()).first<Project>();
+}
+export async function getProject(db: D1Like, id: string): Promise<Project | null> {
+  return db.prepare(`SELECT * FROM projects WHERE id = ?`).bind(id).first<Project>();
+}
+export async function listProjects(db: D1Like): Promise<Project[]> {
+  return (await db.prepare(`SELECT * FROM projects ORDER BY created_at DESC`).all<Project>()).results;
+}
+
+export async function createProject(db: D1Like, p: { slug: string; name: string; ownerEmail: string; kind?: string; province?: string; shard?: string }): Promise<Project> {
+  const slug = p.slug.trim().toLowerCase();
+  if (!isValidSlug(slug)) throw new Error("ชื่อย่อโครงการ (slug) ใช้ได้เฉพาะ a-z 0-9 และ - ยาว 3–40 ตัว และห้ามใช้คำสงวน");
+  const name = p.name.trim();
+  if (!name) throw new Error("ต้องมีชื่อโครงการ");
+  const owner = normEmail(p.ownerEmail);
+  if (!EMAIL_OK.test(owner)) throw new Error("อีเมลเจ้าของโครงการไม่ถูกต้อง");
+  const kind = p.kind === "builder" ? "builder" : "developer";
+  const shard = p.shard ?? "DB";
+  if (!SHARD_OK.test(shard)) throw new Error("ชื่อ shard ไม่ถูกต้อง");
+  if (await getProjectBySlug(db, slug)) throw new Error(`มีโครงการ ${slug} อยู่แล้ว`);
+  const now = nowIso();
+  const project: Project = { id: crypto.randomUUID(), slug, name, kind, province: (p.province ?? "").trim(), shard, status: "active", created_at: now };
+  await db.batch([
+    db.prepare(`INSERT INTO projects (id, slug, name, kind, province, shard, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
+      .bind(project.id, slug, name, kind, project.province, shard, "active", now),
+    db.prepare(`INSERT INTO memberships (project_id, email, role, created_at) VALUES (?, ?, 'owner', ?)`).bind(project.id, owner, now),
+  ]);
+  return project;
+}
+
+// ── สมาชิก ──
+export async function getMembership(db: D1Like, projectId: string, email: string): Promise<ProjectRole | null> {
+  const r = await db.prepare(`SELECT role FROM memberships WHERE project_id = ? AND email = ?`).bind(projectId, normEmail(email)).first<{ role: string }>();
+  return r ? normRole(r.role) : null;
+}
+export async function listMembers(db: D1Like, projectId: string) {
+  return (await db.prepare(`SELECT email, role, created_at FROM memberships WHERE project_id = ? ORDER BY created_at`).bind(projectId).all<{ email: string; role: ProjectRole; created_at: string }>()).results;
+}
+export async function projectsOfEmail(db: D1Like, email: string) {
+  return (await db.prepare(`SELECT p.slug, p.name, m.role FROM memberships m JOIN projects p ON p.id = m.project_id WHERE m.email = ? ORDER BY p.name`).bind(normEmail(email)).all<{ slug: string; name: string; role: ProjectRole }>()).results;
+}
+export async function upsertMember(db: D1Like, projectId: string, emailRaw: string, roleRaw: string) {
+  const email = normEmail(emailRaw);
+  if (!EMAIL_OK.test(email)) throw new Error("อีเมลไม่ถูกต้อง");
+  const role = normRole(roleRaw);
+  if (!role) throw new Error("บทบาทไม่ถูกต้อง");
+  const cur = await getMembership(db, projectId, email);
+  if (cur === "owner" && role !== "owner" && (await countOwners(db, projectId)) <= 1) throw new Error("โครงการต้องมีเจ้าของอย่างน้อย 1 คน");
+  await db.prepare(`INSERT INTO memberships (project_id, email, role, created_at) VALUES (?, ?, ?, ?) ON CONFLICT(project_id, email) DO UPDATE SET role = excluded.role`)
+    .bind(projectId, email, role, nowIso()).run();
+}
+export async function removeMember(db: D1Like, projectId: string, emailRaw: string) {
+  const email = normEmail(emailRaw);
+  if ((await getMembership(db, projectId, email)) === "owner" && (await countOwners(db, projectId)) <= 1) throw new Error("ลบเจ้าของคนสุดท้ายไม่ได้");
+  await db.prepare(`DELETE FROM memberships WHERE project_id = ? AND email = ?`).bind(projectId, email).run();
+}
+async function countOwners(db: D1Like, projectId: string) {
+  const r = await db.prepare(`SELECT COUNT(*) AS n FROM memberships WHERE project_id = ? AND role = 'owner'`).bind(projectId).first<{ n: number }>();
+  return Number(r?.n ?? 0);
+}
+
+// ── ทีม PlanBaan ──
+export async function getStaffRole(db: D1Like, email: string, initialAdmin = ""): Promise<"admin" | "support" | null> {
+  const e = normEmail(email);
+  if (initialAdmin && e === normEmail(initialAdmin)) return "admin";
+  const r = await db.prepare(`SELECT role FROM platform_staff WHERE email = ?`).bind(e).first<{ role: string }>();
+  if (!r) return null;
+  return r.role === "admin" ? "admin" : "support";
+}
+
+// ── สิทธิ์ทีมช่วยเหลือ ──
+export const GRANT_HOURS = [24, 48, 72] as const;
+
+export async function createSupportGrant(db: D1Like, p: { projectId: string; grantedBy: string; hours: number; canEdit: boolean; reason: string; now?: Date }): Promise<SupportGrant> {
+  if (!(GRANT_HOURS as readonly number[]).includes(p.hours)) throw new Error("ระยะเวลาต้องเป็น 24, 48 หรือ 72 ชั่วโมง");
+  const now = p.now ?? new Date();
+  const g: SupportGrant = {
+    id: crypto.randomUUID(), project_id: p.projectId, granted_by: normEmail(p.grantedBy), can_edit: p.canEdit ? 1 : 0,
+    reason: p.reason.trim().slice(0, 300), expires_at: new Date(now.getTime() + p.hours * 3600_000).toISOString(), revoked_at: null, created_at: now.toISOString(),
+  };
+  await db.prepare(`INSERT INTO support_grants (id, project_id, granted_by, can_edit, reason, expires_at, revoked_at, created_at) VALUES (?, ?, ?, ?, ?, ?, NULL, ?)`)
+    .bind(g.id, g.project_id, g.granted_by, g.can_edit, g.reason, g.expires_at, g.created_at).run();
+  return g;
+}
+export async function activeSupportGrant(db: D1Like, projectId: string, now = new Date()): Promise<SupportGrant | null> {
+  return db.prepare(`SELECT * FROM support_grants WHERE project_id = ? AND revoked_at IS NULL AND expires_at > ? ORDER BY expires_at DESC LIMIT 1`)
+    .bind(projectId, now.toISOString()).first<SupportGrant>();
+}
+export async function listSupportGrants(db: D1Like, projectId: string) {
+  return (await db.prepare(`SELECT * FROM support_grants WHERE project_id = ? ORDER BY created_at DESC LIMIT 20`).bind(projectId).all<SupportGrant>()).results;
+}
+export async function revokeSupportGrants(db: D1Like, projectId: string, now = new Date()) {
+  await db.prepare(`UPDATE support_grants SET revoked_at = ? WHERE project_id = ? AND revoked_at IS NULL AND expires_at > ?`)
+    .bind(now.toISOString(), projectId, now.toISOString()).run();
+}
+
+// ── บันทึกการเข้าถึงของทีมช่วยเหลือ ──
+export async function logAccess(db: D1Like, e: { projectId: string; actor: string; action: string; target?: string }) {
+  await db.prepare(`INSERT INTO access_log (project_id, actor, via, action, target, at) VALUES (?, ?, 'support', ?, ?, ?)`)
+    .bind(e.projectId, normEmail(e.actor), e.action.slice(0, 80), (e.target ?? "").slice(0, 200), nowIso()).run();
+}
+export async function listAccessLog(db: D1Like, projectId: string, limit = 50) {
+  return (await db.prepare(`SELECT actor, action, target, at FROM access_log WHERE project_id = ? ORDER BY id DESC LIMIT ?`).bind(projectId, limit)
+    .all<{ actor: string; action: string; target: string; at: string }>()).results;
+}
