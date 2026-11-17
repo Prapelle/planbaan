@@ -16,6 +16,14 @@ const EMAIL_OK = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 export async function getProjectBySlug(db: D1Like, slug: string): Promise<Project | null> {
   return db.prepare(`SELECT * FROM projects WHERE slug = ?`).bind(slug.toLowerCase()).first<Project>();
 }
+/** โครงการ + บทบาทของอีเมลนี้ในคำสั่งเดียว (ลดจำนวนรอบที่คุยกับฐานข้อมูลในทุกหน้า) */
+export async function getProjectWithRole(db: D1Like, slug: string, email: string | null): Promise<{ project: Project; role: ProjectRole | null } | null> {
+  const r = await db.prepare(`SELECT p.*, m.role AS member_role FROM projects p LEFT JOIN memberships m ON m.project_id = p.id AND m.email = ? WHERE p.slug = ?`)
+    .bind(email ? normEmail(email) : "", slug.toLowerCase()).first<Project & { member_role: string | null }>();
+  if (!r) return null;
+  const { member_role, ...project } = r;
+  return { project, role: normRole(member_role) };
+}
 export async function getProject(db: D1Like, id: string): Promise<Project | null> {
   return db.prepare(`SELECT * FROM projects WHERE id = ?`).bind(id).first<Project>();
 }

@@ -3,11 +3,12 @@
  * หน้าและ server action ของโครงการทุกตัวต้องเรียก requireProject() ก่อนทำอะไร
  */
 import "server-only";
+import { cache } from "react";
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { type WorkerEnv, controlDb, getEnv, shardDb } from "./d1";
-import { type Project, getProjectBySlug, getStaffRole } from "./control";
+import { type Project, getProjectWithRole, getStaffRole } from "./control";
 import { type Access, resolveAccess } from "./access";
 import { resolveHost } from "./host";
 import { tenantDb } from "./tenant-db";
@@ -60,15 +61,17 @@ export type ProjectCtx = {
  * เรียกในหน้า/แอ็กชันของโครงการ: ไม่ผ่าน → redirect ไปหน้าที่เหมาะสม
  * action/target ถูกบันทึกใน access_log เมื่อผู้เข้าเป็นทีมช่วยเหลือ
  */
-export async function requireProject(opts: { action?: string; target?: string } = {}): Promise<ProjectCtx> {
+export const requireProject = cache(async (opts: { action?: string; target?: string } = {}): Promise<ProjectCtx> => {
+  const t0 = Date.now();
   const w = await where();
   if (w.kind !== "project") redirect("/");
-  const env = await getEnv();
+  const [env, email] = await Promise.all([getEnv(), sessionEmail()]);
   const control = controlDb(env);
-  const project = await getProjectBySlug(control, w.slug);
-  if (!project) redirect("/?error=project_not_found");
-  const email = await sessionEmail();
-  const access = await resolveAccess(control, project, email, { initialAdmin: cfg().initialAdmin, action: opts.action, target: opts.target });
+  // โครงการ + บทบาทในคำสั่งเดียว
+  const found = await getProjectWithRole(control, w.slug, email);
+  if (!found) redirect("/?error=project_not_found");
+  const { project } = found;
+  const access = await resolveAccess(control, project, email, { initialAdmin: cfg().initialAdmin, action: opts.action, target: opts.target, knownRole: found.role });
   if (!access.ok) {
     if (access.reason === "not_signed_in") redirect("/login");
     redirect(`/no-access?reason=${access.reason}`);
@@ -76,9 +79,22 @@ export async function requireProject(opts: { action?: string; target?: string } 
   const db = tenantDb(shardDb(env, project.shard), project.id);
   const usage = async (event: UsageEvent, meta?: Record<string, string | number>) => {
     if (access.via === "support") return; // ไม่นับการใช้งานของทีมช่วยเหลือเป็นการใช้งานของลูกค้า
-    try { await logUsage(control, { projectId: project.id, event, email, salt: cfg().usageSalt, meta }); } catch (e) { console.error("usage log failed", e); }
+    // บันทึกเบื้องหลัง ไม่ให้ผู้ใช้ต้องรอ
+    const p = logUsage(control, { projectId: project.id, event, email, salt: cfg().usageSalt, meta }).catch((e) => console.error("usage log failed", e));
+    await background(p);
   };
+  console.log(`[timing] ${opts.target ?? ""} access ${Date.now() - t0}ms`);
   return { env, project, email: email!, role: access.role, access, db, usage };
+});
+
+/** ทำงานต่อหลังส่งหน้าเว็บให้ผู้ใช้แล้ว (Workers waitUntil) ถ้าไม่มีให้รอตามปกติ */
+async function background(p: Promise<unknown>) {
+  try {
+    const { getCloudflareContext } = await import("@opennextjs/cloudflare");
+    const ctx = getCloudflareContext().ctx as { waitUntil?: (p: Promise<unknown>) => void } | undefined;
+    if (ctx?.waitUntil) { ctx.waitUntil(p); return; }
+  } catch { /* นอก Worker (เทสต์) */ }
+  await p;
 }
 
 /** ทีม PlanBaan (back office) */

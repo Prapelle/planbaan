@@ -89,4 +89,16 @@ await test("สิทธิ์ตามบทบาท", async () => {
   assert.ok(canEditData("sales") && !canEditData("marketing") && !canEditData("viewer"));
 });
 
+await test("อ่านโครงการพร้อมบทบาทในคำสั่งเดียว ได้ผลเหมือนเดิม", async () => {
+  const f = await C.getProjectWithRole(db, "SuanSon", "OWNER@x.com");
+  assert.equal(f?.project.id, p.id);
+  assert.equal(f?.role, "owner");
+  assert.equal((await C.getProjectWithRole(db, "suanson", "b@x.com"))?.role, null); // สมาชิกของอีกโครงการ
+  assert.equal((await C.getProjectWithRole(db, "suanson", null))?.role, null);
+  assert.equal(await C.getProjectWithRole(db, "nope", "owner@x.com"), null);
+  const a = await resolveAccess(db, f!.project, "owner@x.com", { knownRole: f!.role });
+  assert.ok(a.ok && a.role === "owner");
+  assert.deepEqual(await resolveAccess(db, f!.project, "b@x.com", { knownRole: null }), { ok: false, reason: "no_access" });
+});
+
 console.log("access: ผ่าน");

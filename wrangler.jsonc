@@ -8,6 +8,8 @@
   // ใช้โดเมน workers.dev ระหว่างยังไม่มีโดเมนจริง · ปิด preview URL เพราะล็อกอิน Google ใช้ได้เฉพาะ URL หลัก
   "workers_dev": true,
   "preview_urls": false,
+  // ให้ Cloudflare วาง Worker ไว้ใกล้ฐานข้อมูล D1 อัตโนมัติ: หน้าหนึ่งคุยกับฐานข้อมูลหลายรอบ ยิ่งใกล้ยิ่งเร็ว
+  "placement": { "mode": "smart" },
   "observability": { "enabled": true, "head_sampling_rate": 1 },
   // ฐานข้อมูลหลัก: เก็บตารางระบบ (projects, memberships ฯลฯ) และข้อมูลโครงการกลุ่มแรก
   // เมื่อต้องแบ่งฐานข้อมูล ให้เพิ่ม binding ใหม่ เช่น DB_2 แล้วตั้ง projects.shard = 'DB_2' ให้โครงการที่ย้าย

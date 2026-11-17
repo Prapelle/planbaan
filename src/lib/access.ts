@@ -7,7 +7,7 @@
  */
 import type { D1Like } from "./d1";
 import { type Project, activeSupportGrant, getMembership, getStaffRole, logAccess } from "./control";
-import type { AccessRole } from "./roles";
+import type { AccessRole, ProjectRole } from "./roles";
 
 export type Access =
   | { ok: true; role: AccessRole; via: "member" | "support"; supportCanEdit: boolean; grantExpiresAt?: string }
@@ -17,11 +17,12 @@ export async function resolveAccess(
   db: D1Like,
   project: Project,
   email: string | null | undefined,
-  opts: { initialAdmin?: string; action?: string; target?: string; now?: Date } = {},
+  opts: { initialAdmin?: string; action?: string; target?: string; now?: Date; knownRole?: ProjectRole | null } = {},
 ): Promise<Access> {
   if (!email) return { ok: false, reason: "not_signed_in" };
   if (project.status === "closed") return { ok: false, reason: "project_closed" };
-  const role = await getMembership(db, project.id, email);
+  // knownRole: บทบาทที่อ่านมาพร้อมโครงการแล้ว (getProjectWithRole) ไม่ต้องถามฐานข้อมูลซ้ำ
+  const role = opts.knownRole !== undefined ? opts.knownRole : await getMembership(db, project.id, email);
   if (role) return { ok: true, role, via: "member", supportCanEdit: false };
   const staff = await getStaffRole(db, email, opts.initialAdmin);
   if (staff) {
