@@ -4,11 +4,12 @@ import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { Notice, ProjectShell } from "@/components/ProjectShell";
 import { PhotoUpload } from "@/components/PhotoUpload";
+import { BuildTabs } from "@/components/BuildTabs";
 import { requireProject } from "@/lib/context";
 import { controlDb } from "@/lib/d1";
 import { activeShareLink, createShareLink, revokeShareLinks } from "@/lib/control";
 import { back, baht, errMsg, fv } from "@/lib/form";
-import { canManageBuild, canUpdateBuild } from "@/lib/roles";
+import { canManageBuild, canSeeCosts, canUpdateBuild } from "@/lib/roles";
 import { sniffImage } from "@/lib/planmap";
 import * as C from "@/lib/construction";
 import * as S from "@/lib/sales";
@@ -182,6 +183,7 @@ export default async function BuildDetail({ params, searchParams }: { params: Pr
         </div>
         <span className="rounded-full bg-slate-100 px-3 py-1 text-sm font-semibold">{C.BUILD_STATUS_LABEL[String(build.status)]}</span>
       </div>
+      <BuildTabs id={id} active="progress" showCosts={canSeeCosts(ctx.role)} />
       <Notice error={sp.error} msg={sp.msg} />
       {shareUrl && (
         <div className="mb-4 rounded-md border-2 border-brand-600 bg-white p-3 text-sm">

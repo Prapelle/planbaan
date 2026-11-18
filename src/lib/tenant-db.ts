@@ -10,7 +10,7 @@
 import { type D1Like, type D1Stmt, nowIso } from "./d1";
 
 export const TENANT_TABLES = {
-  plots: ["code", "zone", "house_type", "price", "house_status", "sale_status", "map_x", "map_y"],
+  plots: ["code", "zone", "house_type", "price", "house_status", "sale_status", "map_x", "map_y", "land_cost", "area_sqw"],
   leads: ["name", "phone", "channel", "stage", "plot_code", "owner_email", "last_contact_at", "note", "next_follow_at",
     "loan_docs", "debt_reason", "debt_plan", "debt_retry_at", "debt_since", "max_stage"],
   lead_activity: ["lead_id", "kind", "from_stage", "to_stage", "note", "actor"],
@@ -22,6 +22,9 @@ export const TENANT_TABLES = {
   build_photos: ["build_id", "stage_id", "r2_key", "caption", "published", "taken_by"],
   build_changes: ["build_id", "title", "amount", "status", "decided_at", "decided_by", "decided_note", "created_by"],
   build_log: ["build_id", "kind", "note", "actor"],
+  build_costs: ["build_id", "category", "stage_id", "item", "amount", "cost_date", "entered_by", "batch_id"],
+  cost_budgets: ["house_type", "category", "amount"],
+  cost_settings: ["key", "value"],
 } as const;
 
 /**

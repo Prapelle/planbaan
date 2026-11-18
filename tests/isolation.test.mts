@@ -26,6 +26,9 @@ for (const [T, tag] of [[A, "a"], [B, "b"]] as const) {
   await T.insert("build_photos", { build_id: bd.id, r2_key: `files/x/${tag}.jpg` });
   await T.insert("build_changes", { build_id: bd.id, title: "เพิ่ม", amount: 1 });
   await T.insert("build_log", { build_id: bd.id, kind: "created" });
+  await T.insert("build_costs", { build_id: bd.id, category: "material", item: `ปูน ${tag}`, amount: 1, cost_date: "2026-11-01" });
+  await T.insert("cost_budgets", { house_type: "", category: "material", amount: 1 });
+  await T.insert("cost_settings", { key: "shared_total", value: "1" });
 }
 await B.insert("marketing_budget", { month: "2026-11", channel: "facebook", amount: 2 });
 await B.insert("loan_apps", { lead_id: bL.id, bank: "ออมสิน" });

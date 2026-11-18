@@ -5,14 +5,15 @@
  * - sales: ฝ่ายขาย แก้ข้อมูลลูกค้าและแปลงได้
  * - marketing: การตลาด แก้ได้เฉพาะงบและค่าโฆษณา ข้อมูลลูกค้าดูอย่างเดียว
  * - viewer: ดูอย่างเดียว
+ * - accountant: บัญชี กรอกต้นทุนและเห็นกำไรรายหลัง หน้าอื่นดูอย่างเดียว
  * - foreman: โฟร์แมน เห็นและอัปเดตได้เฉพาะส่วนก่อสร้าง ไม่เห็นข้อมูลลูกค้า
  * - support: ทีม PlanBaan ที่ลูกค้าเปิดสิทธิ์ให้ชั่วคราว (ไม่ได้เก็บใน memberships)
  */
-export type ProjectRole = "owner" | "manager" | "sales" | "marketing" | "viewer" | "foreman";
+export type ProjectRole = "owner" | "manager" | "sales" | "marketing" | "viewer" | "foreman" | "accountant";
 export type AccessRole = ProjectRole | "support";
-export const PROJECT_ROLES: ProjectRole[] = ["owner", "manager", "sales", "marketing", "viewer", "foreman"];
+export const PROJECT_ROLES: ProjectRole[] = ["owner", "manager", "sales", "marketing", "accountant", "viewer", "foreman"];
 export const ROLE_LABEL: Record<AccessRole, string> = {
-  owner: "เจ้าของโครงการ", manager: "ผู้จัดการ", sales: "ฝ่ายขาย", marketing: "การตลาด", viewer: "ดูอย่างเดียว", foreman: "โฟร์แมน", support: "ทีมช่วยเหลือ PlanBaan",
+  owner: "เจ้าของโครงการ", manager: "ผู้จัดการ", sales: "ฝ่ายขาย", marketing: "การตลาด", viewer: "ดูอย่างเดียว", foreman: "โฟร์แมน", accountant: "บัญชี", support: "ทีมช่วยเหลือ PlanBaan",
 };
 export const normRole = (v: unknown): ProjectRole | null => {
   const r = String(v ?? "").trim().toLowerCase();
@@ -38,3 +39,7 @@ export const canUpdateBuild = (r: AccessRole, supportCanEdit = false) =>
 /** ตั้งค่างานก่อสร้าง: สร้างหลัง สัญญา งวดเงิน งานเพิ่ม-ลด ลิงก์เจ้าของบ้าน */
 export const canManageBuild = (r: AccessRole, supportCanEdit = false) =>
   r === "owner" || r === "manager" || (r === "support" && supportCanEdit);
+
+/** ต้นทุนและกำไร: ข้อมูลลับของเจ้าของ เห็นเฉพาะเจ้าของโครงการ บัญชี และทีมช่วยเหลือที่ลูกค้าเปิดสิทธิ์ให้ */
+export const canSeeCosts = (r: AccessRole) => r === "owner" || r === "accountant" || r === "support";
+export const canEditCosts = (r: AccessRole, supportCanEdit = false) => r === "owner" || r === "accountant" || (r === "support" && supportCanEdit);

@@ -9,7 +9,7 @@ import { opsCard, projectsOverview } from "./shared";
 export const dynamic = "force-dynamic";
 
 /** หลังบ้าน: ภาพรวมระบบ — เห็นเฉพาะสถิติและข้อมูลระดับบัญชี ไม่เห็นข้อมูลลูกค้าของโครงการ */
-const PAGE_LABEL: Record<string, string> = { guide: "คู่มือ", build: "ก่อสร้าง", build_detail: "ก่อสร้างรายหลัง", home: "ภาพรวม", plots: "ผังแปลง", leads: "ลูกค้า", lead: "ลูกค้ารายคน", loans: "สินเชื่อ", marketing: "การตลาด", team: "ผลงานรายคน", members: "ผู้ใช้", support: "สิทธิ์ทีมช่วยเหลือ" };
+const PAGE_LABEL: Record<string, string> = { profit: "กำไรรายหลัง", build_costs: "ต้นทุนรายหลัง", guide: "คู่มือ", build: "ก่อสร้าง", build_detail: "ก่อสร้างรายหลัง", home: "ภาพรวม", plots: "ผังแปลง", leads: "ลูกค้า", lead: "ลูกค้ารายคน", loans: "สินเชื่อ", marketing: "การตลาด", team: "ผลงานรายคน", members: "ผู้ใช้", support: "สิทธิ์ทีมช่วยเหลือ" };
 
 export default async function PlatformOverview() {
   const { env, email, staffRole } = await requireStaff();

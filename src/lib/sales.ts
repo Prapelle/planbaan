@@ -79,13 +79,14 @@ export async function getPlotByCode(db: TenantDb, code: string) {
   return (await db.list("plots", { where: { code: cleanCode(code) }, limit: 1 }))[0] ?? null;
 }
 
-export async function updatePlot(db: TenantDb, code: string, patch: { houseType?: string; price?: number; houseStatus?: string; saleStatus?: string }) {
+export async function updatePlot(db: TenantDb, code: string, patch: { houseType?: string; price?: number; houseStatus?: string; saleStatus?: string; areaSqw?: number }) {
   const plot = await getPlotByCode(db, code);
   if (!plot) throw new Error("ไม่พบแปลงนี้");
   const out: Record<string, unknown> = {};
   if (patch.houseType !== undefined) out.house_type = cleanText(patch.houseType, 80);
   if (patch.price !== undefined) { const n = Math.round(Number(patch.price)); if (!(n >= 0)) throw new Error("ราคาไม่ถูกต้อง"); out.price = n; }
   if (patch.houseStatus !== undefined) out.house_status = one(HOUSE_STATUS, patch.houseStatus, "สถานะบ้าน");
+  if (patch.areaSqw !== undefined) { const a = Math.round(Number(patch.areaSqw) * 10) / 10; if (!(a >= 0 && a < 100000)) throw new Error("เนื้อที่ไม่ถูกต้อง"); out.area_sqw = a; }
   if (patch.saleStatus !== undefined) {
     // จอง/ยื่นกู้/โอน มาจากลูกค้าที่ผูกกับแปลงเท่านั้น ตั้งเองได้แค่ ว่าง หรือ ให้เช่า
     const s = one(SALE_STATUS, patch.saleStatus, "สถานะขาย");

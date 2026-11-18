@@ -2,7 +2,7 @@ import Link from "next/link";
 import { ProjectShell } from "@/components/ProjectShell";
 import { legal } from "@/components/LegalPage";
 import { requireProject } from "@/lib/context";
-import { ROLE_LABEL } from "@/lib/roles";
+import { ROLE_LABEL, canSeeCosts } from "@/lib/roles";
 import { stageLabels, PIPELINE, STALE_DAYS } from "@/lib/sales";
 import { DOC_LABEL, HOLD_DAYS, STALE_BANK_DAYS } from "@/lib/loans";
 import { ENT } from "@/lib/entitlement";
@@ -116,6 +116,18 @@ export default async function GuidePage() {
     </>,
   };
 
+  const costs: Sec = {
+    id: "costs", title: "ต้นทุนและกำไรรายหลัง", body: <>
+      <P>เห็นเฉพาะเจ้าของโครงการและบทบาทบัญชี ผู้จัดการ ฝ่ายขาย และโฟร์แมนไม่เห็นตัวเลขเหล่านี้</P>
+      <Steps items={[
+        <>ตั้งค่าครั้งแรกที่เมนู <Go href="/profit">กำไรรายหลัง</Go> (ด้านล่างของหน้า): <b>งบต้นทุนตามแบบบ้าน</b> และ<b>ค่าส่วนกลาง</b>รวมทั้งโครงการ{builder ? " (หารเท่ากันทุกหลัง)" : <> เลือกหารเท่ากันทุกแปลงหรือหารตามตารางวา และ<b>ที่ดิน</b> ใส่รายแปลงหรือใส่ราคารวมแล้วหารตามตารางวา (ใส่เนื้อที่ของแต่ละแปลงในตารางเดียวกัน)</>}</>,
+        <>บันทึกต้นทุนในแท็บ <b>ต้นทุนและกำไร</b> ของแต่ละหลัง หรือกด <b>บันทึกต้นทุน</b> ที่หน้ากำไรรายหลัง ถ้าซื้อรวมหลายหลัง ให้เลือกทุกหลังที่ใช้ ระบบแบ่งเท่ากันให้</>,
+        <>ระบบคิดให้เองสามหมวด: ที่ดิน ส่วนกลาง และการตลาด (จากต้นทุนต่อการจองของช่องทางที่ลูกค้ามา)</>,
+      ]} />
+      <Tip>กำไรของหลังที่ยังสร้างเป็นตัวเลขคาดการณ์ (ต้นทุนจริง + งบที่ยังไม่ใช้) ถ้าวัสดุหรือค่าแรงใช้ไปเร็วกว่าความคืบหน้าของงาน ระบบเตือนว่าอาจเกินงบเท่าไร ลบรายการที่แบ่งหลายหลังจะลบออกจากทุกหลังพร้อมกัน</Tip>
+    </>,
+  };
+
   const marketing: Sec = {
     id: "marketing", title: "การตลาด", body: <>
       <P>หน้าการตลาดบอกว่าแต่ละช่องทางใช้เงินไปเท่าไร ได้ลูกค้ากี่ราย และต้นทุนต่อลูกค้า ต่อการเข้าชม ต่อการจอง</P>
@@ -136,10 +148,11 @@ export default async function GuidePage() {
 
   const roles: [string, string][] = [
     ["เจ้าของโครงการ", "ทำได้ทุกอย่าง รวมถึงเพิ่ม/ลบผู้ใช้"],
-    ["ผู้จัดการ", "ทุกอย่างยกเว้นเพิ่มและลบผู้ใช้ในโครงการ"],
+    ["ผู้จัดการ", "ทุกอย่างยกเว้นเพิ่มและลบผู้ใช้ในโครงการ และไม่เห็นต้นทุนและกำไร"],
     ["ฝ่ายขาย", "เพิ่มและอัปเดตลูกค้า สินเชื่อ ดูผังแปลง"],
     ["การตลาด", "แก้งบและค่าโฆษณา ข้อมูลอื่นดูอย่างเดียว"],
-    ["ดูอย่างเดียว", "ดูได้ทุกหน้า แก้ไม่ได้"],
+    ["บัญชี", "กรอกต้นทุนและเห็นกำไรรายหลัง หน้าอื่นดูอย่างเดียว"],
+    ["ดูอย่างเดียว", "ดูได้ทุกหน้า แก้ไม่ได้ (ไม่เห็นต้นทุนและกำไร)"],
     ["โฟร์แมน", "เห็นเฉพาะงานก่อสร้าง ติ๊กงวด ถ่ายรูป บันทึกหน้างาน"],
   ];
   const settings: Sec = {
@@ -176,7 +189,7 @@ export default async function GuidePage() {
 
   const sections: Sec[] = foreman
     ? [start, buildForeman, help]
-    : [start, ...(builder ? [] : [plots]), leads, ...(builder ? [] : [loans]), build, marketing, team, ...(boss ? [settings, plan] : [settings]), help];
+    : [start, ...(builder ? [] : [plots]), leads, ...(builder ? [] : [loans]), build, ...(buildOn && canSeeCosts(ctx.role) ? [costs] : []), marketing, team, ...(boss ? [settings, plan] : [settings]), help];
 
   return (
     <ProjectShell ctx={ctx} active="/guide">

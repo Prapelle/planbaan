@@ -12,5 +12,6 @@ echo "== entitlement (สิทธิ์ใช้งาน)"; npx tsx tests/enti
 echo "== team (ผลงานรายคน)"; npx tsx tests/team.test.mts
 echo "== archive / plan map / back office"; npx tsx tests/archive-map-office.test.mts
 echo "== construction (ก่อสร้าง)"; npx tsx tests/construction.test.mts
+echo "== costs (ต้นทุนและกำไร)"; npx tsx tests/costs.test.mts
 echo "== host / usage / backup"; npx tsx tests/host-usage-backup.test.mts
 echo "ทุกเทสต์ผ่าน"

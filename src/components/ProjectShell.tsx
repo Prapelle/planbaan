@@ -4,7 +4,7 @@ import { cfg, type ProjectCtx } from "@/lib/context";
 import type { CountSpec } from "@/lib/tenant-db";
 import { STALE_DAYS as S_STALE_DAYS } from "@/lib/sales";
 import { SOURCE_LABEL } from "@/lib/entitlement";
-import { ROLE_LABEL, canExport, canGrantSupport, canManageMembers } from "@/lib/roles";
+import { ROLE_LABEL, canExport, canGrantSupport, canManageMembers, canSeeCosts } from "@/lib/roles";
 
 /** ไอคอนเส้น (ตกแต่ง ซ่อนจากโปรแกรมอ่านหน้าจอ) */
 const ICON: Record<string, string> = {
@@ -19,6 +19,7 @@ const ICON: Record<string, string> = {
   shield: "M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z",
   export: "M12 3v12M7 10l5 5 5-5M4 21h16",
   menu: "M4 6h16M4 12h16M4 18h16",
+  profit: "M3 17l5-5 4 4 8-8M15 8h5v5",
   guide: "M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5zM4 20.5A2.5 2.5 0 0 0 6.5 23H20v-5M8 7h8M8 11h6",
   close: "M6 6l12 12M18 6L6 18",
 };
@@ -58,7 +59,10 @@ function navGroups(ctx: ProjectCtx, b: { leads: number; build: number }): NavGro
       ? [{ href: "/leads", label: "ลูกค้า", icon: "users", badge: b.leads }]
       : [{ href: "/plots", label: "ผังแปลง", icon: "plots" }, { href: "/leads", label: "ลูกค้า", icon: "users", badge: b.leads }, { href: "/loans", label: "สินเชื่อ", icon: "loan" }] },
     { title: "งานก่อสร้าง", items: [build] },
-    { title: "วัดผล", items: [{ href: "/marketing", label: "การตลาด", icon: "mkt" }, { href: "/team", label: "ผลงานรายคน", icon: "team" }] },
+    { title: "วัดผล", items: [
+      { href: "/marketing", label: "การตลาด", icon: "mkt" }, { href: "/team", label: "ผลงานรายคน", icon: "team" },
+      ...(ctx.project.construction_enabled && canSeeCosts(ctx.role) ? [{ href: "/profit", label: "กำไรรายหลัง", icon: "profit" }] : []),
+    ] },
     { title: "ตั้งค่าโครงการ", items: [
       ...(canManageMembers(ctx.role) ? [{ href: "/members", label: "ผู้ใช้ในโครงการ", icon: "member" }] : []),
       ...(canGrantSupport(ctx.role) ? [{ href: "/support", label: "สิทธิ์ทีมช่วยเหลือ", icon: "shield" }] : []),

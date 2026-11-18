@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { ProjectShell } from "@/components/ProjectShell";
 import { requireProject } from "@/lib/context";
-import { canExport } from "@/lib/roles";
+import { canExport, canSeeCosts } from "@/lib/roles";
 import { listArchives } from "@/lib/archive";
 
 export const dynamic = "force-dynamic";
@@ -14,7 +14,8 @@ export default async function ExportPage() {
     { href: "/api/export?table=plots", label: "ผังแปลง (CSV)" },
     { href: "/api/export?table=loan_apps", label: "การยื่นกู้แต่ละธนาคาร (CSV)" },
     { href: "/api/export?table=lead_activity", label: "ประวัติลูกค้า (CSV)" },
-    { href: "/api/export?format=json", label: "ข้อมูลทั้งโครงการ (JSON สำหรับย้ายระบบหรือสำรองเอง)" },
+    ...(canSeeCosts(ctx.role) ? [{ href: "/api/export?table=build_costs", label: "ต้นทุนรายหลัง (CSV)" }] : []),
+    { href: "/api/export?format=json", label: canSeeCosts(ctx.role) ? "ข้อมูลทั้งโครงการ (JSON สำหรับย้ายระบบหรือสำรองเอง)" : "ข้อมูลทั้งโครงการ ไม่รวมต้นทุน (JSON)" },
   ];
   const archives = ctx.env.BACKUPS ? await listArchives(ctx.env.BACKUPS, ctx.project.id) : [];
   return (

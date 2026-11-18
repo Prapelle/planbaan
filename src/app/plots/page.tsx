@@ -35,7 +35,7 @@ async function updateAction(f: FormData) {
   const ctx = await guardEdit();
   const code = fv(f, "code");
   try {
-    await S.updatePlot(ctx.db, code, { houseType: fv(f, "house_type"), price: Number(fv(f, "price") || 0), houseStatus: fv(f, "house_status"), ...(f.has("sale_status") ? { saleStatus: fv(f, "sale_status") } : {}) });
+    await S.updatePlot(ctx.db, code, { houseType: fv(f, "house_type"), price: Number(fv(f, "price") || 0), houseStatus: fv(f, "house_status"), areaSqw: Number(fv(f, "area_sqw") || 0), ...(f.has("sale_status") ? { saleStatus: fv(f, "sale_status") } : {}) });
     await ctx.usage("plot_updated");
   } catch (e) { back("/plots", { error: errMsg(e), extra: { plot: code } }); }
   revalidatePath("/plots");
@@ -170,6 +170,7 @@ export default async function PlotsPage({ searchParams }: { searchParams: Promis
             </div>
             <dl className="mb-4 grid grid-cols-2 gap-y-1 text-sm">
               <dt className="text-slate-600">แบบบ้าน</dt><dd className="font-medium">{String(sel.house_type) || "-"}</dd>
+              <dt className="text-slate-600">เนื้อที่</dt><dd className="font-medium">{Number(sel.area_sqw) ? `${Number(sel.area_sqw)} ตร.ว.` : "-"}</dd>
               <dt className="text-slate-600">ราคา</dt><dd className="font-medium">{baht(sel.price)} บาท</dd>
               <dt className="text-slate-600">สถานะขาย</dt><dd className="font-medium">{S.SALE_LABEL[sel.sale_status as S.SaleStatus]}</dd>
               <dt className="text-slate-600">สถานะบ้าน</dt><dd className="font-medium">{S.HOUSE_LABEL[sel.house_status as S.HouseStatus]}</dd>
@@ -186,6 +187,7 @@ export default async function PlotsPage({ searchParams }: { searchParams: Promis
                   <input type="hidden" name="code" value={String(sel.code)} />
                   <label className="flex flex-col gap-1">แบบบ้าน<input name="house_type" defaultValue={String(sel.house_type)} className="min-h-11 rounded-md border border-slate-300 px-3" /></label>
                   <label className="flex flex-col gap-1">ราคา (บาท)<input name="price" type="number" min={0} step={1000} defaultValue={Number(sel.price)} className="min-h-11 rounded-md border border-slate-300 px-3" /></label>
+                  <label className="flex flex-col gap-1">เนื้อที่ (ตร.ว.)<input name="area_sqw" type="number" min={0} step={0.1} defaultValue={Number(sel.area_sqw) || ""} className="min-h-11 rounded-md border border-slate-300 px-3" /></label>
                   <label className="flex flex-col gap-1">สถานะบ้าน
                     <select name="house_status" defaultValue={String(sel.house_status)} className="min-h-11 rounded-md border border-slate-300 px-3">
                       {S.HOUSE_STATUS.map((h) => <option key={h} value={h}>{S.HOUSE_LABEL[h]}</option>)}
