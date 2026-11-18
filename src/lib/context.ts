@@ -82,7 +82,7 @@ export const requireProject = cache(async (opts: { action?: string; target?: str
     redirect(`/no-access?reason=${access.reason}`);
   }
   // โฟร์แมนเห็นเฉพาะส่วนก่อสร้าง (ไม่เห็นข้อมูลลูกค้า การตลาด สินเชื่อ)
-  if (access.role === "foreman" && !/^\/(build|api\/build-photo)(\/|\?|$)/.test(opts.target ?? "")) redirect("/build");
+  if (access.role === "foreman" && !/^\/(build|guide|api\/build-photo)(\/|\?|$)/.test(opts.target ?? "")) redirect("/build");
   const ent = entitlementOf(project);
   // หมดสิทธิ์: กันทุกการแก้ไขที่นี่อีกชั้น (หน้าเว็บซ่อนปุ่มแก้อยู่แล้ว)
   if (ent.readonly && opts.action === "edit") {

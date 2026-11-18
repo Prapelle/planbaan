@@ -19,6 +19,7 @@ const ICON: Record<string, string> = {
   shield: "M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z",
   export: "M12 3v12M7 10l5 5 5-5M4 21h16",
   menu: "M4 6h16M4 12h16M4 18h16",
+  guide: "M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5zM4 20.5A2.5 2.5 0 0 0 6.5 23H20v-5M8 7h8M8 11h6",
   close: "M6 6l12 12M18 6L6 18",
 };
 export function Icon({ name, size = 18 }: { name: string; size?: number }) {
@@ -49,7 +50,8 @@ async function badgeCounts(ctx: ProjectCtx) {
 function navGroups(ctx: ProjectCtx, b: { leads: number; build: number }): NavGroup[] {
   const builder = ctx.project.kind === "builder";
   const build: NavItem = { href: "/build", label: builder ? "งานก่อสร้าง" : "ก่อสร้าง", icon: "build", badge: b.build };
-  if (ctx.role === "foreman") return [{ title: "", items: [build] }];
+  const guide: NavItem = { href: "/guide", label: "คู่มือการใช้งาน", icon: "guide" };
+  if (ctx.role === "foreman") return [{ title: "", items: [build, guide] }];
   const groups: NavGroup[] = [
     { title: "", items: [{ href: "/", label: "ภาพรวม", icon: "home" }] },
     { title: "งานขาย", items: builder
@@ -62,6 +64,7 @@ function navGroups(ctx: ProjectCtx, b: { leads: number; build: number }): NavGro
       ...(canGrantSupport(ctx.role) ? [{ href: "/support", label: "สิทธิ์ทีมช่วยเหลือ", icon: "shield" }] : []),
       ...(canExport(ctx.role) ? [{ href: "/export", label: "ส่งออกข้อมูล", icon: "export" }] : []),
     ] },
+    { title: "ช่วยเหลือ", items: [guide] },
   ];
   return groups.filter((g) => g.items.length);
 }
@@ -132,7 +135,12 @@ export async function ProjectShell({ ctx, active, children }: { ctx: ProjectCtx;
           <div className="text-xs font-bold text-brand-600">PlanBaan แผนบ้าน</div>
           <div className="truncate text-base font-bold">{ctx.project.name}</div>
         </div>
-        {foreman && <form action={logout}><button className="min-h-10 rounded-lg border border-slate-300 px-3 text-[13px] font-medium">ออกจากระบบ</button></form>}
+        {foreman && (
+          <div className="flex shrink-0 gap-2">
+            <Link href={active === "/guide" ? "/build" : "/guide"} className="flex min-h-10 items-center rounded-lg border border-slate-300 px-3 text-[13px] font-medium">{active === "/guide" ? "ก่อสร้าง" : "คู่มือ"}</Link>
+            <form action={logout}><button className="min-h-10 rounded-lg border border-slate-300 px-3 text-[13px] font-medium">ออกจากระบบ</button></form>
+          </div>
+        )}
       </header>
 
       <div className="flex flex-1">

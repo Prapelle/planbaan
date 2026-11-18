@@ -1,0 +1,204 @@
+import Link from "next/link";
+import { ProjectShell } from "@/components/ProjectShell";
+import { legal } from "@/components/LegalPage";
+import { requireProject } from "@/lib/context";
+import { ROLE_LABEL } from "@/lib/roles";
+import { stageLabels, PIPELINE, STALE_DAYS } from "@/lib/sales";
+import { DOC_LABEL, HOLD_DAYS, STALE_BANK_DAYS } from "@/lib/loans";
+import { ENT } from "@/lib/entitlement";
+
+export const dynamic = "force-dynamic";
+
+/**
+ * คู่มือการใช้งาน: เนื้อหาตามบทบาทและประเภทโครงการ
+ * ตัวเลขในคู่มือ (วันค้างติดตาม วันถือแปลง ช่วงทดลอง) ดึงจากค่าที่ระบบใช้จริง แก้ค่าแล้วคู่มือเปลี่ยนตาม
+ */
+type Sec = { id: string; title: string; body: React.ReactNode };
+
+const P = ({ children }: { children: React.ReactNode }) => <p className="leading-relaxed text-slate-800">{children}</p>;
+const Steps = ({ items }: { items: React.ReactNode[] }) => (
+  <ol className="flex list-decimal flex-col gap-1.5 pl-6 leading-relaxed text-slate-800 marker:font-semibold marker:text-brand-700">{items.map((x, i) => <li key={i}>{x}</li>)}</ol>
+);
+const List = ({ items }: { items: React.ReactNode[] }) => (
+  <ul className="flex list-disc flex-col gap-1.5 pl-6 leading-relaxed text-slate-800">{items.map((x, i) => <li key={i}>{x}</li>)}</ul>
+);
+const Tip = ({ children }: { children: React.ReactNode }) => <p className="rounded-lg bg-brand-50 px-4 py-3 text-sm leading-relaxed text-brand-800">{children}</p>;
+const Go = ({ href, children }: { href: string; children: React.ReactNode }) => <Link href={href} className="font-semibold text-brand-700 underline underline-offset-2">{children}</Link>;
+
+export default async function GuidePage() {
+  const ctx = await requireProject({ action: "view", target: "/guide" });
+  await ctx.usage("page_view", { page: "guide" });
+  const builder = ctx.project.kind === "builder";
+  const foreman = ctx.role === "foreman";
+  const boss = ctx.role === "owner" || ctx.role === "manager";
+  const L = stageLabels(ctx.project.kind);
+  const buildOn = !!ctx.project.construction_enabled;
+  const contact = legal().contact;
+
+  const start: Sec = {
+    id: "start", title: "เริ่มต้นใช้งาน", body: <>
+      <Steps items={[
+        <>เข้าสู่ระบบด้วยบัญชี Google ที่ใช้อีเมลเดียวกับที่เจ้าของโครงการเพิ่มไว้ ถ้าเข้าไม่ได้ ให้แจ้งเจ้าของโครงการเพิ่มอีเมลของคุณ</>,
+        <>บทบาทของคุณในโครงการนี้คือ <b>{ROLE_LABEL[ctx.role]}</b> เมนูและปุ่มที่เห็นจะต่างกันตามบทบาท</>,
+        ...(foreman ? [] : [<>ถ้ามีหลายโครงการ กด <b>โครงการอื่น</b> ที่ด้านล่างของเมนูเพื่อสลับ</>]),
+        <>ติดตั้งบนมือถือ: เปิดเว็บใน Chrome (Android) หรือ Safari (iPhone) แล้วเลือก <b>เพิ่มไปยังหน้าจอหลัก</b> จะได้ไอคอนเปิดเหมือนแอป</>,
+      ]} />
+      {!foreman && <Tip>ตัวเลขแดงบนเมนูคือเรื่องที่ต้องตาม เช่น ลูกค้าที่ไม่ได้ติดต่อเกิน {STALE_DAYS} วัน{buildOn ? " หรือบ้านที่ไม่มีคนอัปเดต" : ""}</Tip>}
+    </>,
+  };
+
+  const plots: Sec = {
+    id: "plots", title: "ผังแปลง", body: <>
+      <P>ผังแปลงแสดงทุกแปลงพร้อมสีตามสถานะขาย สถานะเปลี่ยนเองตามขั้นของลูกค้าที่จองแปลงนั้น ไม่ต้องแก้มือ</P>
+      <List items={[
+        <><b>เพิ่มแปลง:</b> เจ้าของหรือผู้จัดการใส่โซนและจำนวนแปลงครั้งเดียว ระบบตั้งรหัสให้ เช่น A01–A20 แล้วกดแปลงเพื่อแก้แบบบ้านและราคา</>,
+        <><b>สถานะที่ตั้งเองได้:</b> มีแค่ ว่าง กับ ให้เช่า ส่วน จอง ยื่นกู้ โอนแล้ว มาจากลูกค้าอัตโนมัติ</>,
+        <><b>แบบรูปผัง:</b> แท็บ "แบบรูปผัง" อัปโหลดรูปผังโครงการ (PNG JPG ไม่เกิน 5MB) แล้วกด "วางจุดแปลงบนรูป" แตะตำแหน่งของแต่ละแปลง ระบบเลือกแปลงถัดไปให้เอง</>,
+      ]} />
+      <P>ลบแปลงได้เฉพาะแปลงที่ยังไม่มีลูกค้าผูกอยู่</P>
+    </>,
+  };
+
+  const leads: Sec = {
+    id: "leads", title: "ลูกค้า", body: <>
+      <P>ลูกค้าแต่ละรายเลื่อนไปตามขั้น: {PIPELINE.map((s) => L[s]).join(" → ")} หรือ {L.lost}</P>
+      <Steps items={[
+        <>กด <b>+ เพิ่มลูกค้า</b> ใส่ชื่อ เบอร์ และ<b>ช่องทาง</b>ที่ลูกค้ามา (ช่องทางสำคัญ ใช้คิดต้นทุนโฆษณาในหน้าการตลาด)</>,
+        <>เลื่อนขั้นด้วยปุ่มบนการ์ด หรือเปิดหน้าลูกค้าแล้วกดขั้นที่ต้องการ</>,
+        builder
+          ? <>ถึงขั้น <b>{L.booked}</b> แล้ว กด "งานก่อสร้าง" ในหน้าลูกค้าเพื่อเริ่มงานก่อสร้าง ลูกค้าจะย้ายไปขั้น {L.loan} เอง</>
+          : <>ก่อนเลื่อนไปขั้น <b>{L.booked}</b> ต้องเลือกแปลงให้ลูกค้าก่อน แปลงหนึ่งจองได้คนเดียว ถ้าลูกค้า{L.lost} แปลงจะกลับเป็นว่างเอง</>,
+        <>ทุกครั้งที่โทรหรือคุย ให้กด <b>บันทึกการติดต่อ</b> และใส่วันนัดครั้งถัดไป ลูกค้าที่ไม่ได้ติดต่อเกิน {STALE_DAYS} วันจะขึ้นป้ายแดง</>,
+      ]} />
+      <Tip>ติ๊ก "เฉพาะของฉัน" เพื่อดูเฉพาะลูกค้าที่คุณดูแล ช่องค้นหาใช้ได้ทั้งชื่อ เบอร์ และรหัสแปลง</Tip>
+    </>,
+  };
+
+  const loans: Sec = {
+    id: "loans", title: "สินเชื่อ", body: <>
+      <P>ลูกค้าที่ถึงขั้น{L.booked}จะอยู่ในเมนูสินเชื่อ ระบบเก็บแค่ว่าเอกสารครบหรือไม่ <b>ไม่ต้องและไม่ควรอัปโหลดไฟล์เอกสาร</b></P>
+      <Steps items={[
+        <>ติ๊กเอกสารที่ได้แล้ว: {Object.values(DOC_LABEL).join(" ")}</>,
+        <>กด <b>เพิ่มธนาคาร</b> ทีละธนาคารที่ยื่น แต่ละธนาคารมีสถานะของตัวเอง ยื่นแล้วลูกค้าจะย้ายไปขั้น{L.loan}เอง</>,
+        <>อัปเดตสถานะเมื่อธนาคารแจ้ง ถ้าธนาคารไหนไม่ขยับเกิน {STALE_BANK_DAYS} วัน ระบบจะเตือน</>,
+        <>ธนาคารอนุมัติแล้ว ใส่วงเงิน แล้วกด <b>ย้ายไปขั้นโอนแล้ว</b> เมื่อโอนเสร็จ</>,
+      ]} />
+      <P>ถ้าไม่ผ่านทุกธนาคาร จะมีช่อง <b>แก้หนี้</b> ให้บันทึกสาเหตุ แผน และวันที่จะยื่นใหม่ ระบบนับวันที่ถือแปลงไว้ (กำหนด {HOLD_DAYS} วัน) แต่ไม่ปล่อยแปลงเอง ถ้าจะปล่อยให้เปลี่ยนลูกค้าเป็น{L.lost}</P>
+    </>,
+  };
+
+  const buildForeman: Sec = {
+    id: "build", title: builder ? "งานก่อสร้าง (โฟร์แมน)" : "ก่อสร้าง (โฟร์แมน)", body: <>
+      <Steps items={[
+        <>เปิดเมนู <Go href="/build">ก่อสร้าง</Go> บ้านที่ช้าหรือไม่มีคนอัปเดตจะอยู่บนสุด กดหลังที่ต้องการ</>,
+        <>งวดไหนเสร็จ กดปุ่มเขียว <b>งวด … เสร็จแล้ว</b> ต้องทำตามลำดับ ถ้ากดผิดให้กด "ยกเลิกงวดเสร็จ" ที่งวดล่าสุด</>,
+        <>กด <b>ถ่ายรูป</b> หรือ <b>เลือกจากเครื่อง</b> (ได้ทีละไม่เกิน 10 รูป) ระบบย่อรูปให้เอง ส่งได้แม้เน็ตช้า</>,
+        <>มีเรื่องหน้างาน เช่น ฝนตก ของไม่มา ช่างไม่เข้า ให้พิมพ์ใน <b>บันทึกหน้างาน</b></>,
+      ]} />
+      <Tip>ทุกครั้งที่ติ๊กงวด ถ่ายรูป หรือบันทึกหน้างาน นับเป็นการอัปเดต ถ้าไม่มีอัปเดตเกิน {Number(ctx.project.build_stale_days ?? 7)} วัน บ้านหลังนั้นจะขึ้นเตือนให้ผู้จัดการเห็น รูปที่ถ่ายยังไม่ถึงเจ้าของบ้านจนกว่าผู้จัดการกดเผยแพร่</Tip>
+    </>,
+  };
+
+  const build: Sec = {
+    id: "build", title: builder ? "งานก่อสร้าง" : "ก่อสร้าง", body: !buildOn ? (
+      <P>ส่วนก่อสร้างเป็นส่วนเสียเงิน คิดต่อหลังที่กำลังก่อสร้างต่อเดือน โครงการนี้ยังไม่ได้เปิดใช้ ติดต่อทีม PlanBaan เพื่อเปิด</P>
+    ) : <>
+      <Steps items={[
+        builder ? <>เพิ่มงานจากลูกค้าที่{L.booked}แล้ว (หรือกด "งานก่อสร้าง" ในหน้าลูกค้า) ใส่วันเริ่มและกำหนดส่งมอบตามสัญญา</> : <>เพิ่มงานจากแปลง ใส่วันเริ่มและกำหนดส่งมอบตามสัญญา ระบบสร้างงวดงานมาตรฐานและกระจายกำหนดเสร็จให้</>,
+        <>ในหน้างานแต่ละหลัง กด "แก้" ที่งวดเพื่อตั้งกำหนดเสร็จ <b>งวดเงิน</b>ที่เก็บจากลูกค้า และ<b>เบิกกู้ปลูกสร้าง</b></>,
+        <>เพิ่มผู้ใช้บทบาท <b>โฟร์แมน</b> ให้คนหน้างานอัปเดตงวดและถ่ายรูปจากมือถือ โฟร์แมนไม่เห็นราคาและข้อมูลลูกค้า</>,
+        <>เลือกรูปที่จะให้เจ้าของบ้านเห็นด้วยปุ่ม <b>เผยแพร่</b></>,
+        <>กด <b>ออกลิงก์</b> แล้วส่งให้เจ้าของบ้าน เจ้าของบ้านเปิดดูความคืบหน้า รูป และงวดเงินได้โดยไม่ต้องล็อกอิน ลิงก์แสดงครั้งเดียว ถ้าหายให้ออกใหม่ ลิงก์เดิมจะใช้ไม่ได้ทันที</>,
+        <>ครบทุกงวดแล้วกด <b>ส่งมอบบ้าน</b>{builder ? ` ลูกค้าจะย้ายไปขั้น${L.transferred}เอง` : " สถานะบ้านในผังเป็นพร้อมโอน"}</>,
+      ]} />
+      <P><b>งานเพิ่ม-ลด:</b> ใส่รายการและราคา (งานลดใส่ติดลบ) แล้วให้เจ้าของบ้านกดยืนยันในลิงก์พร้อมพิมพ์ชื่อ ถ้าลูกค้ายืนยันทางโทรศัพท์หรือ LINE ให้กด "บันทึกแทนลูกค้า" พร้อมหมายเหตุว่ายืนยันทางไหน เริ่มทำเมื่อยืนยันแล้วเท่านั้น</P>
+      {!builder && <P>สถานะบ้านในผังแปลงเปลี่ยนเองตามงวด: ยังไม่เริ่ม → กำลังสร้าง → พร้อมโอน</P>}
+    </>,
+  };
+
+  const marketing: Sec = {
+    id: "marketing", title: "การตลาด", body: <>
+      <P>หน้าการตลาดบอกว่าแต่ละช่องทางใช้เงินไปเท่าไร ได้ลูกค้ากี่ราย และต้นทุนต่อลูกค้า ต่อการเข้าชม ต่อการจอง</P>
+      <Steps items={[
+        <>ตั้ง <b>งบรายเดือน</b>ของแต่ละช่องทาง</>,
+        <>ส่งออกรายงานจาก Facebook, Google หรือ TikTok Ads <b>แบบแยกรายวัน</b> เป็นไฟล์ CSV แล้วกดนำเข้า (วิธีส่งออกอยู่ใต้ปุ่มนำเข้า) นำเข้าไฟล์เดิมซ้ำได้ ระบบไม่นับซ้ำ</>,
+        <>ค่าใช้จ่ายที่ไม่มีไฟล์ เช่น ป้าย บูธ ค่านายหน้า ให้กรอกเองในช่อง <b>กรอกค่าใช้จ่ายเอง</b></>,
+      ]} />
+      <Tip>ต้นทุนนับจากลูกค้าที่เข้ามาในเดือนนั้น ลูกค้าที่เคยเข้าชมแล้วไม่ซื้อก็ยังนับเป็นการเข้าชม ตัวเลขการจองของเดือนล่าสุดจะเพิ่มขึ้นเรื่อย ๆ ตามเวลา</Tip>
+    </>,
+  };
+
+  const team: Sec = {
+    id: "team", title: "ผลงานรายคน", body: <>
+      <P>ดูทีละเดือนว่าแต่ละคนดูแลลูกค้ากี่ราย ค้างติดตามเท่าไร ติดต่อกี่ครั้ง และได้เข้าชม จอง โอนกี่ราย การติดต่อนับให้คนที่บันทึก ส่วนเข้าชม จอง โอน นับให้ผู้ดูแลลูกค้า ฝ่ายขายเห็นเฉพาะตัวเลขของตัวเองกับยอดรวมทีม</P>
+    </>,
+  };
+
+  const roles: [string, string][] = [
+    ["เจ้าของโครงการ", "ทำได้ทุกอย่าง รวมถึงเพิ่ม/ลบผู้ใช้"],
+    ["ผู้จัดการ", "ทุกอย่างยกเว้นเพิ่มและลบผู้ใช้ในโครงการ"],
+    ["ฝ่ายขาย", "เพิ่มและอัปเดตลูกค้า สินเชื่อ ดูผังแปลง"],
+    ["การตลาด", "แก้งบและค่าโฆษณา ข้อมูลอื่นดูอย่างเดียว"],
+    ["ดูอย่างเดียว", "ดูได้ทุกหน้า แก้ไม่ได้"],
+    ["โฟร์แมน", "เห็นเฉพาะงานก่อสร้าง ติ๊กงวด ถ่ายรูป บันทึกหน้างาน"],
+  ];
+  const settings: Sec = {
+    id: "settings", title: "ผู้ใช้ สิทธิ์ และข้อมูลของโครงการ", body: <>
+      <div className="overflow-x-auto rounded-lg border border-slate-200">
+        <table className="w-full min-w-[480px] text-sm">
+          <thead><tr className="bg-slate-50 text-left text-slate-600"><th className="px-4 py-2 font-semibold">บทบาท</th><th className="px-4 py-2 font-semibold">ทำอะไรได้</th></tr></thead>
+          <tbody>{roles.map(([r, d]) => <tr key={r} className="border-t border-slate-200"><td className="whitespace-nowrap px-4 py-2 font-medium">{r}</td><td className="px-4 py-2 text-slate-700">{d}</td></tr>)}</tbody>
+        </table>
+      </div>
+      <List items={[
+        <><b>เพิ่มผู้ใช้:</b> เจ้าของโครงการเข้าเมนู ผู้ใช้ในโครงการ ใส่อีเมล Google และเลือกบทบาท เมื่อพนักงานลาออก ให้นำออกทันที</>,
+        <><b>ทีมช่วยเหลือ PlanBaan:</b> ทีมเราไม่เห็นข้อมูลโครงการ ถ้าต้องการให้ช่วยดู ให้เปิดสิทธิ์ในเมนู สิทธิ์ทีมช่วยเหลือ (24, 48 หรือ 72 ชั่วโมง ยกเลิกได้ทันที) ทุกการเข้าถึงถูกบันทึกให้คุณเห็น</>,
+        <><b>ส่งออกข้อมูล:</b> เจ้าของและผู้จัดการดาวน์โหลดข้อมูลเป็น CSV (เปิดใน Excel ได้) หรือ JSON ได้ทุกเมื่อ ประวัติที่เก่ากว่า 1 ปีดาวน์โหลดได้ที่หน้าเดียวกัน</>,
+      ]} />
+    </>,
+  };
+
+  const plan: Sec = {
+    id: "plan", title: "สิทธิ์ใช้งานและค่าบริการ", body: <>
+      <List items={[
+        <>โครงการใหม่ใช้ฟรีช่วงทดลอง {ENT.trialDays} วัน และใช้ฟรีต่อเมื่อยอดซื้อ Pure Product ถึงเกณฑ์</>,
+        <>ใกล้หมดสิทธิ์ เจ้าของและผู้จัดการจะเห็นแถบเหลือง เลยกำหนดแล้วยังใช้ได้อีก {ENT.graceDays} วัน (แถบแดง) หลังจากนั้นเป็น <b>ดูอย่างเดียว</b> ดูและส่งออกได้ แก้ไม่ได้ ข้อมูลไม่หาย</>,
+        <>ส่วนก่อสร้างคิดค่าบริการต่อหลังที่กำลังก่อสร้างต่อเดือน</>,
+      ]} />
+    </>,
+  };
+
+  const help: Sec = {
+    id: "help", title: "ติดต่อและช่วยเหลือ", body: <>
+      <P>มีคำถามหรือพบปัญหา ติดต่อ{foreman ? "ผู้จัดการโครงการ หรือ" : ""}ทีม PlanBaan{contact ? <> ที่ <a href={`mailto:${contact}`} className="font-semibold text-brand-700 underline">{contact}</a></> : ""} อ่าน<Go href="/privacy">นโยบายความเป็นส่วนตัว</Go>และ<Go href="/terms">ข้อตกลงการใช้งาน</Go>ได้ตลอด</P>
+    </>,
+  };
+
+  const sections: Sec[] = foreman
+    ? [start, buildForeman, help]
+    : [start, ...(builder ? [] : [plots]), leads, ...(builder ? [] : [loans]), build, marketing, team, ...(boss ? [settings, plan] : [settings]), help];
+
+  return (
+    <ProjectShell ctx={ctx} active="/guide">
+      <div className="mx-auto flex max-w-3xl flex-col gap-6">
+        <div>
+          <h1 className="text-[28px] font-bold leading-tight">คู่มือการใช้งาน</h1>
+          <p className="mt-1 text-sm text-slate-600">เนื้อหาตามบทบาทของคุณ ({ROLE_LABEL[ctx.role]}){builder ? " สำหรับบริษัทรับสร้างบ้าน" : ""}</p>
+        </div>
+        <nav aria-label="หัวข้อในคู่มือ" className="rounded-xl border border-slate-200 bg-white p-4">
+          <ol className="grid grid-cols-1 gap-x-6 gap-y-1 text-sm sm:grid-cols-2">
+            {sections.map((s, i) => (
+              <li key={s.id}><a href={`#${s.id}`} className="flex min-h-10 items-center gap-2 rounded-lg px-2 font-medium text-slate-800 hover:bg-slate-100"><span className="w-5 text-right tabular-nums text-slate-500">{i + 1}.</span>{s.title}</a></li>
+            ))}
+          </ol>
+        </nav>
+        {sections.map((s, i) => (
+          <section key={s.id} id={s.id} className="flex scroll-mt-4 flex-col gap-3 rounded-xl border border-slate-200 bg-white p-5 md:p-6">
+            <h2 className="text-lg font-bold"><span className="mr-2 tabular-nums text-brand-600">{i + 1}.</span>{s.title}</h2>
+            {s.body}
+          </section>
+        ))}
+      </div>
+    </ProjectShell>
+  );
+}
