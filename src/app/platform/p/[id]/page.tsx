@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { projectUrl, requireStaff } from "@/lib/context";
+import { BackShell } from "@/components/BackShell";
 import { controlDb } from "@/lib/d1";
 import { getProject, listMembers, listSupportGrants, ownersOf, setConstruction } from "@/lib/control";
 import { shardDb } from "@/lib/d1";
@@ -59,14 +60,14 @@ const EVENT_LABEL: Record<string, string> = {
   member_added: "เพิ่มผู้ใช้", member_removed: "ลบผู้ใช้", support_granted: "เปิดสิทธิ์ทีมช่วยเหลือ", support_revoked: "ปิดสิทธิ์ทีมช่วยเหลือ",
   export: "ส่งออกข้อมูล", marketing_import: "นำเข้าไฟล์โฆษณา", marketing_updated: "แก้ข้อมูลการตลาด",
 };
-const input = "min-h-11 rounded-md border border-slate-300 px-3";
+const input = "min-h-11 rounded-lg border border-ops-line px-3";
 const lastMonths = (n: number) => {
   const d = new Date(Date.now() + 7 * 3600_000);
   return Array.from({ length: n }, (_, i) => new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() - i, 1)).toISOString().slice(0, 7));
 };
 
 export default async function ProjectAdminPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ error?: string; msg?: string }> }) {
-  const { env, staffRole } = await requireStaff();
+  const { env, email, staffRole } = await requireStaff();
   const { id } = await params;
   const { error, msg } = await searchParams;
   const db = controlDb(env);
@@ -86,58 +87,58 @@ export default async function ProjectAdminPage({ params, searchParams }: { param
   const activeGrant = grants.find((g) => !g.revoked_at && g.expires_at > new Date().toISOString());
 
   return (
-    <main className="mx-auto max-w-5xl p-4 md:p-6">
-      <Link href="/platform" className="text-sm text-brand-700 underline">‹ กลับไปรายการโครงการ</Link>
+    <BackShell env={env} email={email} staffRole={staffRole} active="projects">
+      <Link href="/platform/projects" className="text-sm font-medium text-ops-link underline">กลับไปรายการโครงการ</Link>
       <div className="mb-4 mt-2 flex flex-wrap items-baseline justify-between gap-2">
         <div>
           <h1 className="text-2xl font-bold">{project.name}</h1>
-          <div className="text-sm text-slate-600">{project.slug} · {project.province || "ไม่ระบุจังหวัด"} · สร้างเมื่อ {project.created_at.slice(0, 10)}</div>
+          <div className="text-sm text-ops-muted">{project.slug} · {project.province || "ไม่ระบุจังหวัด"} · สร้างเมื่อ {project.created_at.slice(0, 10)}</div>
         </div>
-        <a href={projectUrl(project.slug)} className="text-sm text-brand-700 underline">เปิดโครงการ (ต้องได้รับสิทธิ์จากลูกค้า)</a>
+        <a href={projectUrl(project.slug)} className="text-sm text-ops-link underline">เปิดโครงการ (ต้องได้รับสิทธิ์จากลูกค้า)</a>
       </div>
-      {error && <p role="alert" className="mb-3 rounded-md bg-red-50 p-3 text-sm text-red-700">{error}</p>}
-      {msg && <p role="status" className="mb-3 rounded-md bg-emerald-50 p-3 text-sm text-emerald-900">{msg}</p>}
+      {error && <p role="alert" className="mb-3 rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</p>}
+      {msg && <p role="status" className="mb-3 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-900">{msg}</p>}
 
       <div className="mb-4 grid grid-cols-1 gap-4 md:grid-cols-3">
-        <section className="rounded-lg border border-slate-200 bg-white p-4 text-sm">
+        <section className="rounded-xl border border-ops-line bg-white p-4 text-sm">
           <h2 className="mb-2 font-semibold">ติดต่อ</h2>
-          <div className="text-slate-600">เจ้าของโครงการ</div>
+          <div className="text-ops-muted">เจ้าของโครงการ</div>
           <ul className="mb-2">{owners.map((o) => <li key={o}>{o}</li>)}</ul>
-          <div className="text-slate-600">ผู้ใช้ {members.length} คน</div>
+          <div className="text-ops-muted">ผู้ใช้ {members.length} คน</div>
           <div>{Object.entries(roleCount).map(([r, n]) => `${ROLE_LABEL[r as ProjectRole] ?? r} ${n}`).join(" · ")}</div>
         </section>
-        <section className="rounded-lg border border-slate-200 bg-white p-4 text-sm">
+        <section className="rounded-xl border border-ops-line bg-white p-4 text-sm">
           <h2 className="mb-2 font-semibold">สิทธิ์ใช้งาน</h2>
           <div className="text-2xl font-bold">{STATE_LABEL[ent.state]}</div>
           <div>{ent.until ? `ถึง ${ent.until} (${SOURCE_LABEL[ent.source]})` : "ยังไม่กำหนด"}</div>
-          {ent.until && !ent.readonly && <div className="text-slate-600">ดูอย่างเดียวตั้งแต่ {ent.readonlyFrom} ถ้าไม่ต่อ</div>}
+          {ent.until && !ent.readonly && <div className="text-ops-muted">ดูอย่างเดียวตั้งแต่ {ent.readonlyFrom} ถ้าไม่ต่อ</div>}
           {ent.manual && <div className="font-semibold text-red-700">ทีมงานตั้งเป็นดูอย่างเดียวเอง</div>}
-          <dl className="mt-2 grid grid-cols-2 text-xs text-slate-600">
+          <dl className="mt-2 grid grid-cols-2 text-xs text-ops-muted">
             <dt>ทดลองถึง</dt><dd>{project.trial_ends_at || "-"}</dd>
             <dt>ยอดซื้อถึง</dt><dd>{project.pure_until || "-"}</dd>
             <dt>ขยายให้ถึง</dt><dd>{project.paid_until || "-"}</dd>
           </dl>
         </section>
-        <section className="rounded-lg border border-slate-200 bg-white p-4 text-sm">
+        <section className="rounded-xl border border-ops-line bg-white p-4 text-sm">
           <h2 className="mb-2 font-semibold">ทีมช่วยเหลือ</h2>
           {activeGrant
             ? <p>ลูกค้าเปิดสิทธิ์ให้ถึง {new Date(activeGrant.expires_at).toLocaleString("th-TH")} ({activeGrant.can_edit ? "แก้ไขได้" : "ดูอย่างเดียว"})</p>
-            : <p className="text-slate-600">ยังไม่ได้เปิดสิทธิ์ ข้อมูลลูกค้าของโครงการนี้ทีมงานเข้าไม่ได้</p>}
-          <p className="mt-2 text-xs text-slate-600">เปิดสิทธิ์ทั้งหมด {grants.length} ครั้ง</p>
+            : <p className="text-ops-muted">ยังไม่ได้เปิดสิทธิ์ ข้อมูลลูกค้าของโครงการนี้ทีมงานเข้าไม่ได้</p>}
+          <p className="mt-2 text-xs text-ops-muted">เปิดสิทธิ์ทั้งหมด {grants.length} ครั้ง</p>
         </section>
       </div>
 
       <div className="mb-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <section className="rounded-lg border border-slate-200 bg-white p-4 text-sm">
+        <section className="rounded-xl border border-ops-line bg-white p-4 text-sm">
           <h2 className="mb-1 font-semibold">ยอดซื้อ Pure Product</h2>
-          <p className="mb-3 text-slate-600">ยอดรวม {ENT.windowMonths} เดือนติดกันถึง {ENT.pureMin.toLocaleString("th-TH")} บาท → ใช้ฟรีถึงสิ้นเดือนถัดไป · ใส่ 0 เพื่อลบ</p>
+          <p className="mb-3 text-ops-muted">ยอดรวม {ENT.windowMonths} เดือนติดกันถึง {ENT.pureMin.toLocaleString("th-TH")} บาท → ใช้ฟรีถึงสิ้นเดือนถัดไป · ใส่ 0 เพื่อลบ</p>
           <table className="mb-3 w-full">
             <tbody>
               {lastMonths(6).map((m) => (
-                <tr key={m} className="border-b border-slate-100">
+                <tr key={m} className="border-b border-ops-line">
                   <td className="py-2">{m}</td>
                   <td className="py-2 text-right tabular-nums">{byMonth.get(m) ? Number(byMonth.get(m)!.amount).toLocaleString("th-TH") : "–"}</td>
-                  <td className="py-2 pl-3 text-xs text-slate-600">{byMonth.get(m)?.recorded_by ?? ""}</td>
+                  <td className="py-2 pl-3 text-xs text-ops-muted">{byMonth.get(m)?.recorded_by ?? ""}</td>
                 </tr>
               ))}
             </tbody>
@@ -146,49 +147,49 @@ export default async function ProjectAdminPage({ params, searchParams }: { param
             <input type="hidden" name="id" value={id} />
             <label className="flex flex-col gap-1">เดือน<input type="month" name="month" required defaultValue={lastMonths(1)[0]} className={input} /></label>
             <label className="flex flex-col gap-1">ยอดซื้อ (บาท)<input name="amount" required inputMode="decimal" className={input} /></label>
-            <button className="min-h-11 rounded-md bg-brand-600 px-4 font-semibold text-white">บันทึก</button>
+            <button className="min-h-11 rounded-lg bg-ops-btn px-4 font-semibold text-white">บันทึก</button>
           </form>
         </section>
 
-        <form action={accessAction} className="flex flex-col gap-3 rounded-lg border border-slate-200 bg-white p-4 text-sm">
+        <form action={accessAction} className="flex flex-col gap-3 rounded-xl border border-ops-line bg-white p-4 text-sm">
           <input type="hidden" name="id" value={id} />
-          <h2 className="font-semibold">ปรับสิทธิ์เอง {staffRole !== "admin" && <span className="font-normal text-slate-600">(เฉพาะ admin)</span>}</h2>
+          <h2 className="font-semibold">ปรับสิทธิ์เอง {staffRole !== "admin" && <span className="font-normal text-ops-muted">(เฉพาะ admin)</span>}</h2>
           <fieldset disabled={staffRole !== "admin"} className="flex flex-col gap-3">
             <label className="flex flex-col gap-1">ขยายให้ถึง (จ่ายเงินเอง หรือกรณีพิเศษ) เว้นว่าง = ไม่ขยาย<input type="date" name="paid_until" defaultValue={project.paid_until} className={input} /></label>
             <label className="flex flex-col gap-1">วันสุดท้ายของช่วงทดลอง<input type="date" name="trial_ends_at" defaultValue={project.trial_ends_at} className={input} /></label>
             <label className="flex min-h-11 items-center gap-3"><input type="checkbox" name="readonly" defaultChecked={project.status === "readonly"} className="h-5 w-5" />ตั้งเป็นดูอย่างเดียวทันที (เช่น ลูกค้าขอหยุดใช้)</label>
-            <button className="min-h-11 self-start rounded-md border border-slate-400 px-4 font-semibold">บันทึกสิทธิ์</button>
+            <button className="min-h-11 self-start rounded-lg border border-ops-600 px-4 font-semibold">บันทึกสิทธิ์</button>
           </fieldset>
         </form>
       </div>
 
-      <section className="mb-4 rounded-lg border border-slate-200 bg-white p-4 text-sm">
+      <section className="mb-4 rounded-xl border border-ops-line bg-white p-4 text-sm">
         <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
           <h2 className="font-semibold">ส่วนก่อสร้าง (เสียเงิน) · {project.construction_enabled ? "เปิดอยู่" : "ปิดอยู่"}</h2>
           <form action={constructionAction}><input type="hidden" name="id" value={id} /><input type="hidden" name="enabled" value={project.construction_enabled ? "" : "1"} />
-            <button disabled={staffRole !== "admin"} className={`min-h-11 rounded-md px-4 font-semibold ${project.construction_enabled ? "border border-red-300 text-red-700" : "bg-brand-600 text-white"}`}>{project.construction_enabled ? "ปิดส่วนก่อสร้าง" : "เปิดส่วนก่อสร้าง"}</button></form>
+            <button disabled={staffRole !== "admin"} className={`min-h-11 rounded-lg px-4 font-semibold ${project.construction_enabled ? "border border-red-300 text-red-700" : "bg-ops-btn text-white hover:bg-ops-btn-hover"}`}>{project.construction_enabled ? "ปิดส่วนก่อสร้าง" : "เปิดส่วนก่อสร้าง"}</button></form>
         </div>
-        <p className="mb-2 text-slate-600">คิด {BUILD_PRICE().toLocaleString("th-TH")} บาทต่อหลังที่กำลังก่อสร้างในเดือนนั้น (เริ่มแล้วและยังไม่ส่งมอบก่อนต้นเดือน) · ออกบิลจากระบบบัญชีเอง</p>
-        <table className="w-full max-w-md"><thead><tr className="text-left text-slate-600"><th className="pb-1 font-medium">เดือน</th><th className="pb-1 text-right font-medium">หลัง</th><th className="pb-1 text-right font-medium">ยอด (บาท)</th></tr></thead>
-          <tbody>{billing.map((b) => <tr key={b.month} className="border-t border-slate-100"><td className="py-1">{b.month}</td><td className="py-1 text-right tabular-nums">{b.houses}</td><td className="py-1 text-right tabular-nums">{(b.houses * BUILD_PRICE()).toLocaleString("th-TH")}</td></tr>)}</tbody></table>
+        <p className="mb-2 text-ops-muted">คิด {BUILD_PRICE().toLocaleString("th-TH")} บาทต่อหลังที่กำลังก่อสร้างในเดือนนั้น (เริ่มแล้วและยังไม่ส่งมอบก่อนต้นเดือน) · ออกบิลจากระบบบัญชีเอง</p>
+        <table className="w-full max-w-md"><thead><tr className="text-left text-ops-muted"><th className="pb-1 font-medium">เดือน</th><th className="pb-1 text-right font-medium">หลัง</th><th className="pb-1 text-right font-medium">ยอด (บาท)</th></tr></thead>
+          <tbody>{billing.map((b) => <tr key={b.month} className="border-t border-ops-line"><td className="py-1">{b.month}</td><td className="py-1 text-right tabular-nums">{b.houses}</td><td className="py-1 text-right tabular-nums">{(b.houses * BUILD_PRICE()).toLocaleString("th-TH")}</td></tr>)}</tbody></table>
       </section>
 
-      <section className="mb-4 rounded-lg border border-slate-200 bg-white p-4 text-sm">
+      <section className="mb-4 rounded-xl border border-ops-line bg-white p-4 text-sm">
         <h2 className="mb-1 font-semibold">การใช้งาน 30 วัน</h2>
-        <p className="mb-3 text-slate-600">ผู้ใช้ {usage.users} คน · ไม่รวมการเข้าของทีมช่วยเหลือ · นับเฉพาะจำนวน ไม่มีเนื้อหาข้อมูลลูกค้า</p>
+        <p className="mb-3 text-ops-muted">ผู้ใช้ {usage.users} คน · ไม่รวมการเข้าของทีมช่วยเหลือ · นับเฉพาะจำนวน ไม่มีเนื้อหาข้อมูลลูกค้า</p>
         <div className="mb-4 flex h-24 items-end gap-1" aria-label="จำนวนการใช้งานรายวัน">
-          {usage.daily.length === 0 && <span className="text-slate-600">ยังไม่มีการใช้งาน</span>}
+          {usage.daily.length === 0 && <span className="text-ops-muted">ยังไม่มีการใช้งาน</span>}
           {usage.daily.map((d) => (
-            <div key={d.day} title={`${d.day}: ${d.n} ครั้ง ${d.users} คน`} className="flex-1 rounded-t bg-brand-600" style={{ height: `${Math.max(4, (d.n / maxDay) * 100)}%` }} />
+            <div key={d.day} title={`${d.day}: ${d.n} ครั้ง ${d.users} คน`} className="flex-1 rounded-t bg-ops-btn" style={{ height: `${Math.max(4, (d.n / maxDay) * 100)}%` }} />
           ))}
         </div>
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <table className="w-full"><thead><tr className="text-left text-slate-600"><th className="pb-1 font-medium">เหตุการณ์</th><th className="pb-1 text-right font-medium">ครั้ง</th></tr></thead>
-            <tbody>{usage.byEvent.map((e) => <tr key={e.event} className="border-t border-slate-100"><td className="py-1">{EVENT_LABEL[e.event] ?? e.event}</td><td className="py-1 text-right tabular-nums">{e.n}</td></tr>)}</tbody></table>
-          <table className="w-full"><thead><tr className="text-left text-slate-600"><th className="pb-1 font-medium">หน้า</th><th className="pb-1 text-right font-medium">เปิด</th></tr></thead>
-            <tbody>{usage.byPage.map((e) => <tr key={e.page} className="border-t border-slate-100"><td className="py-1">{e.page}</td><td className="py-1 text-right tabular-nums">{e.n}</td></tr>)}</tbody></table>
+          <table className="w-full"><thead><tr className="text-left text-ops-muted"><th className="pb-1 font-medium">เหตุการณ์</th><th className="pb-1 text-right font-medium">ครั้ง</th></tr></thead>
+            <tbody>{usage.byEvent.map((e) => <tr key={e.event} className="border-t border-ops-line"><td className="py-1">{EVENT_LABEL[e.event] ?? e.event}</td><td className="py-1 text-right tabular-nums">{e.n}</td></tr>)}</tbody></table>
+          <table className="w-full"><thead><tr className="text-left text-ops-muted"><th className="pb-1 font-medium">หน้า</th><th className="pb-1 text-right font-medium">เปิด</th></tr></thead>
+            <tbody>{usage.byPage.map((e) => <tr key={e.page} className="border-t border-ops-line"><td className="py-1">{e.page}</td><td className="py-1 text-right tabular-nums">{e.n}</td></tr>)}</tbody></table>
         </div>
       </section>
-    </main>
+    </BackShell>
   );
 }

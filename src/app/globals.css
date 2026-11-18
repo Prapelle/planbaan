@@ -32,6 +32,22 @@
   --color-brand-600: #2563EB;
   --color-brand-700: #1D4ED8;
   --color-brand-800: #1E3A8A;
+  /* หลังบ้าน (ทีม PlanBaan): กรมท่า + เขียวมิ้นต์ — แบบ A ที่เลือก 18/11/2026 */
+  --color-ops-950: #0A2130;
+  --color-ops-900: #0E2A3A;
+  --color-ops-800: #173A4C;
+  --color-ops-700: #1D4A5E;
+  --color-ops-600: #2F5A6D;
+  --color-ops-300: #9DB8C2;
+  --color-ops-200: #CFE0E6;
+  --color-ops-mint: #6EE0C8;
+  --color-ops-btn: #0E7C6B;
+  --color-ops-btn-hover: #0B6657;
+  --color-ops-link: #0E6B5C;
+  --color-ops-bg: #F2F6F7;
+  --color-ops-line: #DCE6EA;
+  --color-ops-ink: #10222B;
+  --color-ops-muted: #4B6470;
 }
 
 body { font-feature-settings: "tnum" 0; }

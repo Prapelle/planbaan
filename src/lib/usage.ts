@@ -42,13 +42,13 @@ export async function logUsage(db: D1Like, e: { projectId: string; event: UsageE
 export async function usageSummary(db: D1Like, now = new Date()) {
   const since = new Date(now.getTime() - 7 * 86400_000).toISOString();
   const r = await db.prepare(`
-    SELECT p.id, p.slug, p.name, p.kind, p.province, p.status, p.created_at, p.trial_ends_at, p.pure_until, p.paid_until,
+    SELECT p.id, p.slug, p.name, p.kind, p.province, p.status, p.created_at, p.trial_ends_at, p.pure_until, p.paid_until, p.construction_enabled,
       (SELECT MAX(at) FROM usage_events u WHERE u.project_id = p.id) AS last_at,
       (SELECT COUNT(DISTINCT actor_hash) FROM usage_events u WHERE u.project_id = p.id AND u.at >= ? AND actor_hash <> '') AS users_7d,
       (SELECT COUNT(*) FROM usage_events u WHERE u.project_id = p.id AND u.at >= ?) AS events_7d,
       (SELECT COUNT(*) FROM memberships m WHERE m.project_id = p.id) AS members
     FROM projects p ORDER BY p.created_at DESC`).bind(since, since)
-    .all<{ id: string; slug: string; name: string; kind: string; province: string; status: string; created_at: string; trial_ends_at: string; pure_until: string; paid_until: string; last_at: string | null; users_7d: number; events_7d: number; members: number }>();
+    .all<{ id: string; slug: string; name: string; kind: string; province: string; status: string; created_at: string; trial_ends_at: string; pure_until: string; paid_until: string; construction_enabled: number; last_at: string | null; users_7d: number; events_7d: number; members: number }>();
   return r.results;
 }
 

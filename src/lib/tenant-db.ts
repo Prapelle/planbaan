@@ -52,6 +52,7 @@ function checkCols(t: TenantTable, cols: string[]) {
 }
 const colList = (t: TenantTable) => [...SYSTEM_COLS, ...TENANT_TABLES[t]].map((c) => `"${c}"`).join(", ");
 
+export type CountSpec = { table: TenantTable; where?: Record<string, string | number>; lt?: Record<string, string | number>; notIn?: Record<string, (string | number)[]> };
 export type BatchOp =
   | { kind: "insert"; table: TenantTable; data: Record<string, unknown>; id?: string }
   | { kind: "update"; table: TenantTable; id: string; patch: Record<string, unknown> };
@@ -111,6 +112,27 @@ export function tenantDb(db: D1Like, projectId: string) {
       const conds = ["project_id = ?", ...Object.keys(where).map((c) => `"${c}" = ?`)];
       const r = await db.prepare(`SELECT COUNT(*) AS n FROM "${t}" WHERE ${conds.join(" AND ")}`).bind(pid, ...Object.values(where)).first<{ n: number }>();
       return Number(r?.n ?? 0);
+    },
+
+    /**
+     * นับหลายเงื่อนไขในคำสั่งเดียว (หนึ่งรอบไปกลับฐานข้อมูล) ใช้กับตัวเลขเตือนบนเมนู
+     * where = เท่ากับ, lt = น้อยกว่า, notIn = ไม่อยู่ในรายการ — ทุกเงื่อนไขอยู่ในโครงการนี้เท่านั้น
+     */
+    async countMany(specs: CountSpec[]): Promise<number[]> {
+      if (!specs.length) return [];
+      const parts: string[] = [], args: unknown[] = [];
+      for (const sp of specs) {
+        const t = checkTable(sp.table);
+        const where = sp.where ?? {}, lt = sp.lt ?? {}, notIn = sp.notIn ?? {};
+        checkCols(t, [...Object.keys(where), ...Object.keys(lt), ...Object.keys(notIn)]);
+        const conds = ["project_id = ?"]; args.push(pid);
+        for (const [c, v] of Object.entries(where)) { conds.push(`"${c}" = ?`); args.push(v); }
+        for (const [c, v] of Object.entries(lt)) { conds.push(`"${c}" < ?`); args.push(v); }
+        for (const [c, vs] of Object.entries(notIn)) { if (vs.length) { conds.push(`"${c}" NOT IN (${vs.map(() => "?").join(",")})`); args.push(...vs); } }
+        parts.push(`(SELECT COUNT(*) FROM "${t}" WHERE ${conds.join(" AND ")}) AS c${parts.length}`);
+      }
+      const r = await db.prepare(`SELECT ${parts.join(", ")}`).bind(...args).first<Record<string, number>>();
+      return specs.map((_, i) => Number(r?.[`c${i}`] ?? 0));
     },
 
     async get(table: TenantTable, id: string): Promise<Row | null> {

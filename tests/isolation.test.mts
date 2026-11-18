@@ -97,3 +97,15 @@ await test("ต้องระบุโครงการ", async () => {
 });
 
 console.log("isolation: ผ่าน");
+
+await test("countMany (ตัวเลขเตือนบนเมนู) นับเฉพาะโครงการตัวเอง และตรวจชื่อคอลัมน์", async () => {
+  const old = "2020-01-01T00:00:00.000Z";
+  await A.insert("leads", { name: "ค้าง A", stage: "contacted", channel: "other", last_contact_at: old });
+  await A.insert("leads", { name: "ปิดแล้ว A", stage: "lost", channel: "other", last_contact_at: old });
+  await B.insert("leads", { name: "ค้าง B", stage: "contacted", channel: "other", last_contact_at: old });
+  const spec = { table: "leads" as const, notIn: { stage: ["lost", "transferred"], last_contact_at: [""] }, lt: { last_contact_at: "2021-01-01" } };
+  const [a] = await A.countMany([spec]);
+  const [b] = await B.countMany([spec]);
+  assert.deepEqual([a, b], [1, 1]);
+  await assert.rejects(A.countMany([{ table: "leads", lt: { "project_id": "x" } }]), /คอลัมน์/);
+});
