@@ -115,12 +115,15 @@ await test("หารตามตารางวา: ที่ดินราค
   await rejects(K.setPlotLand(db, { A01: { area: "-5" } }), /เนื้อที่/);
 });
 
-await test("รับสร้างบ้าน: หารตามตร.ว.ไม่มีผล ใช้หารเท่ากันต่อหลัง", async () => {
+await test("รับสร้างบ้าน: ไม่มีหมวดที่ดินและส่วนกลาง แม้มีค่าตั้งไว้", async () => {
   await K.setSetting(other, "shared_total", "90000");
-  await K.setSetting(other, "shared_mode", "area");
   const l = await S.createLead(other, { name: "ข" }, "b@x.com");
-  await C.createBuild(other, { leadId: l.id, startDate: plus(0), dueDate: plus(100) }, "b@x.com");
-  const rep = await K.profitReport(other, { kind: "builder" });
-  assert.equal(rep.sharedMode, "equal");
-  assert.equal(rep.rows[0].lines.find((x) => x.cat === "shared")!.actual, 90000);
+  const bb = await C.createBuild(other, { leadId: l.id, startDate: plus(0), dueDate: plus(100), price: "1,800,000" }, "b@x.com");
+  await K.setBudgetTemplate(other, "", { material: "900000", labor: "500000" });
+  const r = (await K.profitReport(other, { kind: "builder" })).rows[0];
+  assert.equal(r.build.id, bb.id);
+  assert.deepEqual(r.lines.map((x) => x.cat), ["material", "labor", "transfer", "giveaway", "commission", "marketing", "other"]);
+  assert.equal(r.projectedTotal, 1400000);
+  assert.equal(r.profit, 400000);
+  assert.ok(!r.flags.includes("ยังไม่ใส่ตร.ว."));
 });

@@ -105,7 +105,7 @@ export default async function BuildCosts({ params, searchParams }: { params: Pro
                   <td className="px-5 py-2.5"><div className="font-semibold">{K.CAT_LABEL[l.cat]}</div>
                     {l.auto && <div className="text-xs text-slate-600">{
                       l.cat === "land" ? (rep.landMode === "area" ? `ราคาที่ดินรวม หารตามเนื้อที่ ${plotArea} ตร.ว.` : "ใส่รายแปลงที่หน้ากำไรรายหลัง")
-                      : l.cat === "shared" ? (rep.sharedMode === "area" ? `ค่าส่วนกลาง หารตามเนื้อที่ ${plotArea} ตร.ว.` : `ค่าส่วนกลาง ÷ ${rep.sharedDiv} ${ctx.project.kind === "builder" ? "หลัง" : "แปลง"}`)
+                      : l.cat === "shared" ? (rep.sharedMode === "area" ? `ค่าส่วนกลาง หารตามเนื้อที่ ${plotArea} ตร.ว.` : `ค่าส่วนกลาง ÷ ${rep.sharedDiv} แปลง`)
                       : "ระบบคิดจากต้นทุนต่อการจองของช่องทางลูกค้า"}</div>}</td>
                   <td className="px-3 py-2.5 text-right tabular-nums">{l.budget ? baht(l.budget) : "–"}</td>
                   <td className={`px-3 py-2.5 text-right font-semibold tabular-nums ${over ? "text-red-700" : ""}`}>{l.actual ? baht(l.actual) : "–"}</td>

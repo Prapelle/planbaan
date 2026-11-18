@@ -116,7 +116,7 @@ export default async function ProfitPage({ searchParams }: { searchParams: Promi
       </div>
 
       <h2 id="budgets" className="mb-1 scroll-mt-4 text-lg font-bold">งบต้นทุนตามแบบบ้าน</h2>
-      <p className="mb-3 max-w-2xl text-sm text-slate-600">ตั้งครั้งเดียวต่อแบบบ้าน ทุกหลังที่ใช้แบบนั้นได้งบเดียวกันอัตโนมัติ {builder ? "" : "แบบที่ไม่ได้ตั้งจะใช้งบทั่วไป"} (ที่ดิน ส่วนกลาง และการตลาด ระบบคิดให้ ไม่ต้องตั้ง)</p>
+      <p className="mb-3 max-w-2xl text-sm text-slate-600">ตั้งครั้งเดียวต่อแบบบ้าน {builder ? "ใช้กับทุกหลัง (การตลาดระบบคิดให้ ไม่ต้องตั้ง)" : "ทุกหลังที่ใช้แบบนั้นได้งบเดียวกันอัตโนมัติ แบบที่ไม่ได้ตั้งจะใช้งบทั่วไป (ที่ดิน ส่วนกลาง และการตลาด ระบบคิดให้ ไม่ต้องตั้ง)"}</p>
       <div className="mb-8 flex flex-col gap-3">
         {typeRows.map((ht) => (
           <form key={ht || "_"} action={budgetAction} className="rounded-xl border border-slate-200 bg-white p-4 text-sm">
@@ -135,6 +135,7 @@ export default async function ProfitPage({ searchParams }: { searchParams: Promi
       </div>
 
       <div className="flex flex-col gap-4">
+        {!builder && (
         <form id="shared" action={sharedAction} className="scroll-mt-4 rounded-xl border border-slate-200 bg-white p-5 text-sm">
           <h2 className="mb-1 text-base font-bold">ค่าส่วนกลาง</h2>
           <p className="mb-3 max-w-2xl text-slate-600">ถนน ไฟฟ้า ประปา สำนักงานขาย รั้ว ฯลฯ ใส่ยอดรวมทั้งโครงการ แล้วเลือกวิธีหาร</p>
@@ -154,6 +155,7 @@ export default async function ProfitPage({ searchParams }: { searchParams: Promi
               : <>ตอนนี้: หารเท่ากัน {rep.sharedDiv} {builder ? "หลัง" : "แปลง"} = {builder ? "หลัง" : "แปลง"}ละ {baht(rep.sharedEach)} บาท</>}
           </p>
         </form>
+        )}
 
         {!builder && (
           <form id="land" action={landAction} className="scroll-mt-4 rounded-xl border border-slate-200 bg-white p-5 text-sm">

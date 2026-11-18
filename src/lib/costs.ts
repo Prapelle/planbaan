@@ -6,6 +6,7 @@
  *   - กรอกเอง: วัสดุ ค่าแรง ค่าโอนและภาษี ของแถมและส่วนลด ค่านายหน้า อื่น ๆ (งบจากแม่แบบตามแบบบ้าน)
  *   - ระบบคิดให้: ที่ดิน (ใส่รายแปลง หรือราคารวมหารตามตารางวา), ส่วนกลาง (หารเท่ากันทุกแปลง หรือหารตามตารางวา),
  *     การตลาด (ต้นทุนต่อการจองของช่องทางลูกค้า)
+ *   - บริษัทรับสร้างบ้าน: ไม่มีหมวดที่ดินและส่วนกลาง (สร้างบนที่ดินลูกค้า)
  * ต้นทุนคาดการณ์ของหลังที่ยังสร้าง = max(จริง, งบ) ต่อหมวด · หลังที่ส่งมอบแล้วใช้ต้นทุนจริง
  * เตือนล่วงหน้า: วัสดุ/ค่าแรงใช้ไปเร็วกว่าความคืบหน้า (ตั้งแต่งาน 40%) บอกยอดที่อาจเกินถ้าใช้ในอัตรานี้
  */
@@ -21,6 +22,8 @@ export const CAT_LABEL: Record<CostCat, string> = {
   giveaway: "ของแถมและส่วนลด", commission: "ค่านายหน้า", other: "อื่น ๆ", shared: "ส่วนกลาง", marketing: "การตลาด",
 };
 export const CAT_ORDER: CostCat[] = ["land", "material", "labor", "transfer", "giveaway", "commission", "shared", "marketing", "other"];
+/** บริษัทรับสร้างบ้านสร้างบนที่ดินของลูกค้า: ไม่มีต้นทุนที่ดินและค่าส่วนกลางของโครงการ */
+export const catsFor = (kind?: string): CostCat[] => (kind === "builder" ? CAT_ORDER.filter((c) => c !== "land" && c !== "shared") : CAT_ORDER);
 /** หมวดที่ใช้เงินตามความคืบหน้างาน — ใช้เตือนล่วงหน้าว่าจะเกินงบ */
 const PACED: CostCat[] = ["material", "labor"];
 const BOOK = PIPELINE.indexOf("booked");
@@ -155,8 +158,8 @@ export async function profitReport(db: TenantDb, opts: { kind?: string; now?: Da
   const landMode = !builder && setting("land_mode") === "area" ? "area" : "plot";
   const totalArea = plots.reduce((a, p) => a + Number(p.area_sqw ?? 0), 0);
   const missingArea = plots.filter((p) => !(Number(p.area_sqw ?? 0) > 0)).length;
-  const sharedDiv = builder ? Math.max(1, builds.length) : Math.max(1, plots.length);
-  const sharedEach = r2(sharedTotal / sharedDiv);
+  const sharedDiv = Math.max(1, plots.length);
+  const sharedEach = builder ? 0 : r2(sharedTotal / sharedDiv);
   const byArea = (total: number, p: Row | undefined) => (p && totalArea > 0 ? r2((total * Number(p.area_sqw ?? 0)) / totalArea) : 0);
   const sharedOf = (p: Row | undefined) => (sharedMode === "area" ? byArea(sharedTotal, p) : sharedEach);
   const landOf = (p: Row | undefined) => (landMode === "area" ? byArea(landTotal, p) : Number(p?.land_cost ?? 0));
@@ -191,7 +194,7 @@ export async function profitReport(db: TenantDb, opts: { kind?: string; now?: Da
     const budget = tmpl(String(plot?.house_type ?? ""));
     const mine = costs.filter((c) => c.build_id === b.id);
     const lead = leadOf(b);
-    const lines: CatLine[] = CAT_ORDER.map((cat) => {
+    const lines: CatLine[] = catsFor(opts.kind).map((cat) => {
       if (cat === "land") { const v = landOf(plot); return { cat, budget: v, actual: v, projected: v, auto: true, paceWarn: 0 }; }
       if (cat === "shared") { const v = sharedOf(plot); return { cat, budget: v, actual: v, projected: v, auto: true, paceWarn: 0 }; }
       if (cat === "marketing") { const v = lead ? cpb.get(String(lead.channel)) ?? 0 : 0; return { cat, budget: v, actual: v, projected: v, auto: true, paceWarn: 0 }; }
