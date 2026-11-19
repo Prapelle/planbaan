@@ -27,8 +27,8 @@ export default async function ExportPage() {
           <li key={f.href}><a href={f.href} className="flex min-h-12 items-center rounded-lg border border-slate-200 bg-white px-4 font-medium hover:border-brand-500">{f.label}</a></li>
         ))}
       </ul>
-      <h2 className="mb-1 mt-8 text-lg font-semibold">ประวัติลูกค้าที่เก็บถาวร</h2>
-      <p className="mb-3 max-w-2xl text-sm text-slate-600">ประวัติการติดต่อและการเปลี่ยนขั้นที่เก่ากว่า 1 ปี ระบบย้ายออกจากหน้าใช้งานเพื่อให้เร็ว ข้อมูลไม่หาย ดาวน์โหลดได้ที่นี่ (ไฟล์ .ndjson.gz)</p>
+      <h2 className="mb-1 mt-8 text-lg font-semibold">ประวัติที่เก็บถาวร</h2>
+      <p className="mb-3 max-w-2xl text-sm text-slate-600">ข้อมูลที่เก่ากว่า 1 ปี ระบบย้ายออกจากหน้าใช้งานเพื่อให้เร็ว ข้อมูลไม่หาย ดาวน์โหลดได้ที่นี่ (ไฟล์ .ndjson.gz): ไฟล์ lead_activity คือประวัติการติดต่อและการเปลี่ยนขั้นของลูกค้า ไฟล์ access_log คือบันทึกการเข้าดูของทีมช่วยเหลือ PlanBaan</p>
       {archives.length === 0 ? <p className="text-sm text-slate-700">ยังไม่มี</p> : (
         <ul className="flex max-w-xl flex-col gap-2 text-sm">
           {archives.map((a) => (

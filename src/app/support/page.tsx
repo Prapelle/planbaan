@@ -78,7 +78,8 @@ export default async function SupportPage({ searchParams }: { searchParams: Prom
         </form>
       )}
 
-      <h2 className="mb-2 text-lg font-semibold">บันทึกการเข้าถึงของทีมช่วยเหลือ</h2>
+      <h2 className="mb-1 text-lg font-semibold">บันทึกการเข้าถึงของทีมช่วยเหลือ</h2>
+      <p className="mb-2 text-sm text-slate-600">บันทึกที่เก่ากว่า 1 ปีย้ายไปเก็บถาวร ดาวน์โหลดได้ที่หน้าส่งออกข้อมูล</p>
       {log.length === 0 ? <p className="text-sm text-slate-600">ยังไม่มีการเข้าถึง</p> : (
         <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
           <table className="w-full min-w-[520px] text-sm">

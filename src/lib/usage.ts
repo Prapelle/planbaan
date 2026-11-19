@@ -43,7 +43,8 @@ export async function usageSummary(db: D1Like, now = new Date()) {
   const since = new Date(now.getTime() - 7 * 86400_000).toISOString();
   const r = await db.prepare(`
     SELECT p.id, p.slug, p.name, p.kind, p.province, p.status, p.created_at, p.trial_ends_at, p.pure_until, p.paid_until, p.construction_enabled,
-      (SELECT MAX(at) FROM usage_events u WHERE u.project_id = p.id) AS last_at,
+      COALESCE((SELECT MAX(at) FROM usage_events u WHERE u.project_id = p.id),
+        (SELECT MAX(last_at) FROM usage_monthly m WHERE m.project_id = p.id)) AS last_at,
       (SELECT COUNT(DISTINCT actor_hash) FROM usage_events u WHERE u.project_id = p.id AND u.at >= ? AND actor_hash <> '') AS users_7d,
       (SELECT COUNT(*) FROM usage_events u WHERE u.project_id = p.id AND u.at >= ?) AS events_7d,
       (SELECT COUNT(*) FROM memberships m WHERE m.project_id = p.id) AS members

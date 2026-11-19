@@ -3,6 +3,7 @@
 import { default as handler } from "./.open-next/worker.js";
 import { runBackup } from "./src/lib/backup";
 import { runArchive } from "./src/lib/archive";
+import { runOpsArchive } from "./src/lib/ops-archive";
 
 type Env = Record<string, unknown> & { BACKUPS: unknown; BACKUP_RETENTION_DAYS?: string; ARCHIVE_DAYS?: string };
 
@@ -13,7 +14,8 @@ export default {
     ctx.waitUntil(
       runBackup(env as never, { retentionDays: Number(env.BACKUP_RETENTION_DAYS ?? 30) })
         .then((r) => { console.log("backup ok", JSON.stringify(r)); return runArchive(env as never, { days: Number(env.ARCHIVE_DAYS ?? 365) }); })
-        .then((a) => console.log("archive ok", JSON.stringify(a)), (e) => console.error("backup/archive failed", e)),
+        .then((a) => { console.log("archive ok", JSON.stringify(a)); return runOpsArchive(env as never); })
+        .then((o) => console.log("ops archive ok", JSON.stringify(o)), (e) => console.error("backup/archive failed", e)),
     );
   },
 };
