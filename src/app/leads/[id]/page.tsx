@@ -26,9 +26,11 @@ async function saveAction(f: FormData) {
       name: fv(f, "name"), phone: fv(f, "phone"), channel: fv(f, "channel"), plotCode: fv(f, "plot_code"),
       ownerEmail: fv(f, "owner_email"), nextFollowAt: fv(f, "next_follow_at"), note: fv(f, "note"),
     }, ctx.email);
+    // ใส่บันทึกการติดต่อมาด้วย = นับเป็นการติดต่อ (รีเซ็ตวันค้างติดตาม)
+    if (fv(f, "contact")) await S.logContact(ctx.db, id, fv(f, "contact"), ctx.email);
   } catch (e) { back(`/leads/${id}`, { error: errMsg(e) }); }
   revalidatePath(`/leads/${id}`);
-  back(`/leads/${id}`, { msg: "บันทึกแล้ว" });
+  back(`/leads/${id}`, { msg: fv(f, "contact") ? "บันทึกข้อมูลและการติดต่อแล้ว" : "บันทึกข้อมูลแล้ว" });
 }
 
 async function stageAction(f: FormData) {
@@ -43,15 +45,6 @@ async function stageAction(f: FormData) {
   back(`/leads/${id}`, { msg: `เปลี่ยนเป็น ${S.stageLabels(ctx.project.kind)[fv(f, "stage") as S.Stage]} แล้ว` });
 }
 
-async function contactAction(f: FormData) {
-  "use server";
-  const id = fv(f, "id");
-  const ctx = await guardEdit(id);
-  try { await S.logContact(ctx.db, id, fv(f, "note"), ctx.email, fv(f, "next_follow_at")); }
-  catch (e) { back(`/leads/${id}`, { error: errMsg(e) }); }
-  revalidatePath(`/leads/${id}`);
-  back(`/leads/${id}`, { msg: "บันทึกการติดต่อแล้ว" });
-}
 
 const when = (iso: unknown) => new Date(String(iso)).toLocaleString("th-TH", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Bangkok" });
 const KIND: Record<string, string> = { created: "เพิ่มลูกค้า", stage: "เปลี่ยนขั้น", contact: "ติดต่อ", edit: "แก้ไขข้อมูล", loan: "สินเชื่อ" };
@@ -120,22 +113,21 @@ export default async function LeadPage({ params, searchParams }: { params: Promi
                 {members.map((m) => <option key={m.email} value={m.email}>{m.email}</option>)}
               </select>
             </label>
-            <label className="flex flex-col gap-1">นัดติดตามครั้งถัดไป<input name="next_follow_at" type="date" defaultValue={String(lead.next_follow_at)} className="min-h-11 rounded-md border border-slate-300 px-3" /></label>
-            <label className="flex flex-col gap-1 sm:col-span-2">หมายเหตุ<textarea name="note" rows={3} maxLength={1000} defaultValue={String(lead.note)} className="rounded-md border border-slate-300 p-3" /></label>
-            {canEdit && <button className="min-h-11 rounded-md bg-brand-600 px-4 font-semibold text-white sm:col-span-2">บันทึกข้อมูล</button>}
+            <label className="flex flex-col gap-1">นัดติดตามครั้งถัดไป<input name="next_follow_at" type="date" defaultValue={String(lead.next_follow_at)} className="min-h-11 rounded-md border border-slate-300 px-3" />
+              <Link href={`/calendar?lead=${id}#add`} className="text-xs font-medium text-brand-700 underline">เพิ่มนัดหมายพร้อมเวลาในปฏิทิน</Link></label>
+            <label className="flex flex-col gap-1 sm:col-span-2">หมายเหตุเกี่ยวกับลูกค้า<textarea name="note" rows={2} maxLength={1000} defaultValue={String(lead.note)} className="rounded-md border border-slate-300 p-3" /></label>
+            {canEdit && (
+              <label className="flex flex-col gap-1 rounded-md bg-brand-50 p-3 sm:col-span-2">
+                <span className="font-semibold text-brand-800">บันทึกการติดต่อครั้งนี้ (ถ้ามี)</span>
+                <textarea name="contact" rows={2} maxLength={1000} placeholder="เช่น โทรแล้ว ลูกค้าขอดูแบบบ้านอีกครั้ง" className="rounded-md border border-slate-300 bg-white p-3" />
+                <span className="text-xs text-slate-600">ใส่ข้อความแล้วนับเป็นการติดต่อ ป้ายค้างติดตามจะหายไป</span>
+              </label>
+            )}
+            {canEdit && <button className="min-h-12 rounded-md bg-brand-600 px-4 text-base font-semibold text-white hover:bg-brand-700 sm:col-span-2">บันทึก</button>}
           </fieldset>
         </form>
 
         <div className="flex flex-1 flex-col gap-4">
-          {canEdit && (
-            <form action={contactAction} className="flex flex-col gap-2 rounded-lg border border-slate-200 bg-white p-4 text-sm">
-              <input type="hidden" name="id" value={id} />
-              <div className="font-semibold">บันทึกการติดต่อ</div>
-              <textarea name="note" required rows={2} maxLength={1000} placeholder="เช่น โทรแล้ว ลูกค้าขอดูแบบบ้านอีกครั้ง" className="rounded-md border border-slate-300 p-3" />
-              <label className="flex flex-col gap-1">นัดครั้งถัดไป<input name="next_follow_at" type="date" defaultValue={String(lead.next_follow_at)} className="min-h-11 rounded-md border border-slate-300 px-3" /></label>
-              <button className="min-h-11 rounded-md border border-slate-400 px-4 font-semibold">บันทึก</button>
-            </form>
-          )}
           <section className="rounded-lg border border-slate-200 bg-white p-4 text-sm">
             <h2 className="mb-2 font-semibold">ประวัติ</h2>
             {S.daysSince(String(lead.created_at)) > Number(process.env.ARCHIVE_DAYS ?? 365) && (

@@ -55,6 +55,17 @@ await test("วางจุดแปลงบนรูป ตรวจค่า 
   assert.equal(plot?.map_x, null);
 });
 
+await test("วางจุดแปลงใหม่บนรูป: สร้างแปลงพร้อมตำแหน่ง โซนจากตัวอักษรนำ ตรวจรูปแบบเลข", async () => {
+  assert.equal(await placePlot(db, "c07", 10, 20, { create: true }), true);
+  const pl = await S.getPlotByCode(db, "C07");
+  assert.deepEqual([pl?.zone, pl?.map_x, pl?.map_y, pl?.sale_status], ["C", 10, 20, "available"]);
+  assert.equal(await placePlot(db, "C07", 30, 40, { create: true }), false); // มีแล้ว = ย้ายจุด ไม่สร้างซ้ำ
+  assert.equal((await db.list("plots", { where: { code: "C07" } })).length, 1);
+  await rejects(placePlot(db, "Z99", 1, 1), /ไม่พบแปลง/); // ไม่ได้ขอสร้าง
+  await rejects(placePlot(db, "แปลง 1", 1, 1, { create: true }), /เลขแปลง/);
+  await rejects(placePlot(db, "", 1, 1, { create: true }), /เลือกหรือพิมพ์/);
+});
+
 await test("ตรวจชนิดรูปจากเนื้อไฟล์ และ key ต้องอยู่ใต้โครงการตัวเอง", async () => {
   assert.equal(sniffImage(new Uint8Array([0x89, 0x50, 0x4e, 0x47, 13, 10, 26, 10, 0]))?.ext, "png");
   assert.equal(sniffImage(new Uint8Array([0xff, 0xd8, 0xff, 0xe0]))?.ext, "jpg");

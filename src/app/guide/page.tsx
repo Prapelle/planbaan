@@ -47,6 +47,17 @@ export default async function GuidePage() {
     </>,
   };
 
+  const calendar: Sec = {
+    id: "calendar", title: "ปฏิทิน", body: <>
+      <P>ปฏิทินรวมวันที่ในระบบมาให้เอง ไม่ต้องกรอกซ้ำ: นัดติดตามลูกค้า{builder ? "" : " วันที่จะยื่นกู้ใหม่"}{buildOn ? " กำหนดเสร็จงวดงาน และกำหนดส่งมอบบ้าน" : ""}</P>
+      <List items={[
+        <><b>เพิ่มนัดหมายเอง:</b> กดตัวเลขวันในปฏิทิน หรือใช้กล่อง "เพิ่มนัดหมาย" ใส่เวลาและผูกกับลูกค้าได้</>,
+        <><b>เฉพาะของฉัน:</b> ดูเฉพาะลูกค้าที่คุณดูแลและนัดที่คุณสร้าง</>,
+        <>ลบนัดหมายได้เฉพาะที่คุณสร้าง เจ้าของโครงการและผู้จัดการลบได้ทุกนัด</>,
+      ]} />
+    </>,
+  };
+
   const plots: Sec = {
     id: "plots", title: "ผังแปลง", body: <>
       <P>ผังแปลงแสดงทุกแปลงพร้อมสีตามสถานะขาย สถานะเปลี่ยนเองตามขั้นของลูกค้าที่จองแปลงนั้น ไม่ต้องแก้มือ</P>
@@ -189,7 +200,7 @@ export default async function GuidePage() {
 
   const sections: Sec[] = foreman
     ? [start, buildForeman, help]
-    : [start, ...(builder ? [] : [plots]), leads, ...(builder ? [] : [loans]), build, ...(buildOn && canSeeCosts(ctx.role) ? [costs] : []), marketing, team, ...(boss ? [settings, plan] : [settings]), help];
+    : [start, calendar, ...(builder ? [] : [plots]), leads, ...(builder ? [] : [loans]), build, ...(buildOn && canSeeCosts(ctx.role) ? [costs] : []), marketing, team, ...(boss ? [settings, plan] : [settings]), help];
 
   return (
     <ProjectShell ctx={ctx} active="/guide">

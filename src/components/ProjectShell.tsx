@@ -20,6 +20,7 @@ const ICON: Record<string, string> = {
   export: "M12 3v12M7 10l5 5 5-5M4 21h16",
   menu: "M4 6h16M4 12h16M4 18h16",
   profit: "M3 17l5-5 4 4 8-8M15 8h5v5",
+  calendar: "M4 6a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1zM4 10h16M8 3v4M16 3v4M8 14h2M14 14h2M8 17h2",
   guide: "M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5zM4 20.5A2.5 2.5 0 0 0 6.5 23H20v-5M8 7h8M8 11h6",
   close: "M6 6l12 12M18 6L6 18",
 };
@@ -54,7 +55,7 @@ function navGroups(ctx: ProjectCtx, b: { leads: number; build: number }): NavGro
   const guide: NavItem = { href: "/guide", label: "คู่มือการใช้งาน", icon: "guide" };
   if (ctx.role === "foreman") return [{ title: "", items: [build, guide] }];
   const groups: NavGroup[] = [
-    { title: "", items: [{ href: "/", label: "ภาพรวม", icon: "home" }] },
+    { title: "", items: [{ href: "/", label: "ภาพรวม", icon: "home" }, { href: "/calendar", label: "ปฏิทิน", icon: "calendar" }] },
     { title: "งานขาย", items: builder
       ? [{ href: "/leads", label: "ลูกค้า", icon: "users", badge: b.leads }]
       : [{ href: "/plots", label: "ผังแปลง", icon: "plots" }, { href: "/leads", label: "ลูกค้า", icon: "users", badge: b.leads }, { href: "/loans", label: "สินเชื่อ", icon: "loan" }] },

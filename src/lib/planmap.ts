@@ -22,11 +22,20 @@ const pos = (v: unknown) => {
   return n;
 };
 
-export async function placePlot(db: TenantDb, codeRaw: string, x: unknown, y: unknown) {
+const CODE_OK = /^[A-Z0-9][A-Z0-9-]{0,11}$/;
+
+/** วางจุดแปลงบนรูป · create = ยังไม่มีแปลงนี้ให้สร้างใหม่ (โซนคือตัวอักษรนำหน้า เช่น A12 → โซน A) คืน true ถ้าสร้างใหม่ */
+export async function placePlot(db: TenantDb, codeRaw: string, x: unknown, y: unknown, opts: { create?: boolean } = {}) {
   const code = codeRaw.trim().toUpperCase();
+  if (!code) throw new Error("เลือกหรือพิมพ์เลขแปลงก่อนแตะบนรูป");
+  const at = { map_x: pos(x), map_y: pos(y) };
   const [plot] = await db.list("plots", { where: { code }, limit: 1 });
-  if (!plot) throw new Error(`ไม่พบแปลง ${code}`);
-  await db.update("plots", plot.id, { map_x: pos(x), map_y: pos(y) });
+  if (plot) { await db.update("plots", plot.id, at); return false; }
+  if (!opts.create) throw new Error(`ไม่พบแปลง ${code}`);
+  if (!CODE_OK.test(code)) throw new Error("เลขแปลงใช้ตัวอักษรอังกฤษ ตัวเลข หรือ - ไม่เกิน 12 ตัว เช่น A01");
+  const zone = (/^[A-Z]+/.exec(code)?.[0] ?? code.slice(0, 1)).slice(0, 4);
+  await db.insert("plots", { code, zone, house_type: "", price: 0, house_status: "not_started", sale_status: "available", ...at });
+  return true;
 }
 
 export async function unplacePlot(db: TenantDb, codeRaw: string) {

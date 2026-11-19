@@ -25,6 +25,7 @@ export const TENANT_TABLES = {
   build_costs: ["build_id", "category", "stage_id", "item", "amount", "cost_date", "entered_by", "batch_id"],
   cost_budgets: ["house_type", "category", "amount"],
   cost_settings: ["key", "value"],
+  events: ["title", "event_date", "event_month", "event_time", "note", "lead_id", "created_by"],
 } as const;
 
 /**

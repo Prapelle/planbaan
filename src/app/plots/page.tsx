@@ -86,10 +86,20 @@ async function removePlanAction() {
 async function placeAction(f: FormData) {
   "use server";
   const ctx = await guardEdit();
-  const code = fv(f, "code");
-  try { await placePlot(ctx.db, code, fv(f, "x"), fv(f, "y")); } catch (e) { back(MAP, { error: errMsg(e) }); }
+  // พิมพ์เลขแปลงใหม่ได้ ระบบสร้างแปลงให้ (ไม่ต้องสร้างแบบตารางก่อน)
+  const code = (fv(f, "new_code") || fv(f, "code")).toUpperCase();
+  let created = false;
+  try { created = await placePlot(ctx.db, code, fv(f, "x"), fv(f, "y"), { create: !!fv(f, "new_code") }); } catch (e) { back(MAP, { error: errMsg(e) }); }
   revalidatePath("/plots");
-  back(MAP, { msg: `วางแปลง ${code.toUpperCase()} แล้ว` });
+  // วางต่อเนื่อง: กลับมาในโหมดวางจุด และเสนอเลขแปลงถัดไป (A01 → A02) เมื่อเพิ่งสร้างแปลงใหม่
+  let next = "";
+  if (created) {
+    const have = new Set((await ctx.db.list("plots", { limit: 2000 })).map((p) => String(p.code)));
+    const bump = (c: string) => { const m = /^(.*?)(\d+)$/.exec(c); return m ? m[1] + String(Number(m[2]) + 1).padStart(m[2].length, "0") : ""; };
+    next = bump(code);
+    while (next && have.has(next)) next = bump(next);
+  }
+  back(MAP, { msg: created ? `สร้างแปลง ${code} และวางจุดแล้ว · ใส่แบบบ้านและราคาได้โดยกดที่จุด` : `วางแปลง ${code} แล้ว`, extra: { placing: "1", ...(next ? { next } : {}) } });
 }
 
 async function unplaceAction(f: FormData) {
@@ -101,10 +111,10 @@ async function unplaceAction(f: FormData) {
   back(MAP, { msg: `เอาแปลง ${code.toUpperCase()} ออกจากรูปแล้ว`, extra: { plot: code } });
 }
 
-export default async function PlotsPage({ searchParams }: { searchParams: Promise<{ plot?: string; view?: string; error?: string; msg?: string }> }) {
+export default async function PlotsPage({ searchParams }: { searchParams: Promise<{ plot?: string; view?: string; error?: string; msg?: string; placing?: string; next?: string }> }) {
   const ctx = await requireProject({ action: "view", target: "/plots" });
   await ctx.usage("page_view", { page: "plots" });
-  const { plot: selCode, view, error, msg } = await searchParams;
+  const { plot: selCode, view, error, msg, placing, next } = await searchParams;
   const hasImage = !!ctx.project.plan_image;
   const mapView = view === "map";
   const base = mapView ? MAP : "/plots";
@@ -138,9 +148,9 @@ export default async function PlotsPage({ searchParams }: { searchParams: Promis
 
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
         <div className="min-w-0 flex-[2] rounded-lg border border-slate-200 bg-white p-4">
-          {plots.length === 0 && <p className="text-slate-600">ยังไม่มีแปลง {canEdit ? "เพิ่มแปลงจากกล่องด้านล่าง" : "ให้เจ้าของโครงการหรือผู้จัดการเพิ่มแปลง"}</p>}
+          {plots.length === 0 && <p className="text-slate-600">ยังไม่มีแปลง {!canEdit ? "ให้เจ้าของโครงการหรือผู้จัดการเพิ่มแปลง" : mapView && hasImage ? "กด \"วางจุดแปลงบนรูป\" แล้วพิมพ์เลขแปลง ระบบสร้างแปลงให้ หรือสร้างหลายแปลงพร้อมกันที่แท็บแบบตาราง" : mapView ? "อัปโหลดรูปผังด้านล่าง หรือสร้างแปลงที่แท็บแบบตาราง" : "เพิ่มแปลงจากกล่องด้านล่าง"}</p>}
           {mapView && hasImage && (
-            <PlanMap src="/api/plan-image" imgVersion={String(ctx.project.plan_image).slice(-12)} canEdit={canEdit} placeAction={canEdit ? placeAction : undefined} selected={sel ? String(sel.code) : undefined}
+            <PlanMap key={`${placing}-${next}-${msg}`} startPlacing={placing === "1"} initialNew={next && /^[A-Z0-9][A-Z0-9-]{0,11}$/.test(next) ? next : undefined} src="/api/plan-image" imgVersion={String(ctx.project.plan_image).slice(-12)} canEdit={canEdit} placeAction={canEdit ? placeAction : undefined} selected={sel ? String(sel.code) : undefined}
               colors={SALE_COLOR} plots={plots.map((p) => ({ code: String(p.code), x: p.map_x === null || p.map_x === undefined ? null : Number(p.map_x), y: p.map_y === null || p.map_y === undefined ? null : Number(p.map_y), status: String(p.sale_status), label: S.SALE_LABEL[p.sale_status as S.SaleStatus] }))} />
           )}
           {mapView && !hasImage && (
