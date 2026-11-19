@@ -170,6 +170,7 @@ function checkPlotState(code: string, st: PlotState, stage: string) {
   if (!code) return;
   if (!st.plot) throw new Error(`ไม่พบแปลง ${code}`);
   if (stageIdx(stage) >= BOOKED_IDX && st.buyer) throw new Error(`แปลง ${code} มีลูกค้าจองแล้ว`);
+  if (stageIdx(stage) >= BOOKED_IDX && st.plot.sale_status === "rent") throw new Error(`แปลง ${code} ตั้งเป็นให้เช่า เปลี่ยนเป็นว่างที่ผังแปลงก่อนจึงจองได้`);
 }
 
 const activityOp = (leadId: string, kind: string, actor: string, extra: { from?: string; to?: string; note?: string } = {}): BatchOp => ({
@@ -285,14 +286,15 @@ export function daysSince(iso: string, now = new Date()) {
   if (!Number.isFinite(t)) return 0;
   return Math.floor((now.getTime() - t) / 86400_000);
 }
-export const isStale = (lead: Record<string, unknown>, now = new Date()) =>
-  !isClosed(String(lead.stage)) && daysSince(String(lead.last_contact_at), now) > STALE_DAYS;
+/** ค้างติดตาม: ยังไม่ปิด และไม่ได้ติดต่อเกิน 3 วัน · รับสร้างบ้านขั้น "ก่อสร้าง" ไม่นับ (ติดตามที่งานก่อสร้างแทน) */
+export const isStale = (lead: Record<string, unknown>, now = new Date(), kind?: string) =>
+  !isClosed(String(lead.stage)) && !(kind === "builder" && lead.stage === "loan") && daysSince(String(lead.last_contact_at), now) > STALE_DAYS;
 
 /** วันที่แบบไทย (เขตเวลา Asia/Bangkok) YYYY-MM-DD */
 export const bkkDate = (d = new Date()) => new Date(d.getTime() + 7 * 3600_000).toISOString().slice(0, 10);
 
 // ── ภาพรวม ──
-export async function overview(db: TenantDb, now = new Date()) {
+export async function overview(db: TenantDb, now = new Date(), kind?: string) {
   const [leads, plots] = await Promise.all([db.list("leads", { limit: 2000 }), db.list("plots", { limit: 2000 })]);
   const month = bkkDate(now).slice(0, 7);
   const today = bkkDate(now);
@@ -312,7 +314,7 @@ export async function overview(db: TenantDb, now = new Date()) {
     reachedBooked: reached("booked"),
     transferred: byStage.transferred,
     byStage, byChannel, plotStatus, totalPlots: plots.length,
-    stale: leads.filter((l) => isStale(l, now)).sort((a, b) => String(a.last_contact_at).localeCompare(String(b.last_contact_at))),
+    stale: leads.filter((l) => isStale(l, now, kind)).sort((a, b) => String(a.last_contact_at).localeCompare(String(b.last_contact_at))),
     followToday: leads.filter((l) => !isClosed(String(l.stage)) && l.next_follow_at && String(l.next_follow_at) <= today)
       .sort((a, b) => String(a.next_follow_at).localeCompare(String(b.next_follow_at))),
   };

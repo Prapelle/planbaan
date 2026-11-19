@@ -35,7 +35,7 @@ async function updateAction(f: FormData) {
   const ctx = await guardEdit();
   const code = fv(f, "code");
   try {
-    await S.updatePlot(ctx.db, code, { houseType: fv(f, "house_type"), price: Number(fv(f, "price") || 0), houseStatus: fv(f, "house_status"), areaSqw: Number(fv(f, "area_sqw") || 0), ...(f.has("sale_status") ? { saleStatus: fv(f, "sale_status") } : {}) });
+    await S.updatePlot(ctx.db, code, { houseType: fv(f, "house_type"), price: Number(fv(f, "price") || 0), ...(f.has("house_status") ? { houseStatus: fv(f, "house_status") } : {}), areaSqw: Number(fv(f, "area_sqw") || 0), ...(f.has("sale_status") ? { saleStatus: fv(f, "sale_status") } : {}) });
     await ctx.usage("plot_updated");
   } catch (e) { back("/plots", { error: errMsg(e), extra: { plot: code } }); }
   revalidatePath("/plots");
@@ -125,6 +125,8 @@ export default async function PlotsPage({ searchParams }: { searchParams: Promis
   const sel = plots.find((p) => p.code === (selCode ?? "").toUpperCase()) ?? null;
   const selLeads = sel ? leads.filter((l) => l.plot_code === sel.code) : [];
   const buyer = selLeads.find((l) => S.stageIdx(String(l.stage)) >= S.stageIdx("booked"));
+  // เปิดส่วนก่อสร้างและแปลงนี้มีงานก่อสร้าง → สถานะบ้านมาจากงวดงาน ไม่ให้แก้มือ
+  const autoHouse = !!sel && !!ctx.project.construction_enabled && (await ctx.db.count("builds", { plot_code: String(sel.code) })) > 0;
 
   return (
     <ProjectShell ctx={ctx} active="/plots">
@@ -196,13 +198,17 @@ export default async function PlotsPage({ searchParams }: { searchParams: Promis
                 <form action={updateAction} className="flex flex-col gap-2 border-t border-slate-200 pt-3 text-sm">
                   <input type="hidden" name="code" value={String(sel.code)} />
                   <label className="flex flex-col gap-1">แบบบ้าน<input name="house_type" defaultValue={String(sel.house_type)} className="min-h-11 rounded-md border border-slate-300 px-3" /></label>
-                  <label className="flex flex-col gap-1">ราคา (บาท)<input name="price" type="number" min={0} step={1000} defaultValue={Number(sel.price)} className="min-h-11 rounded-md border border-slate-300 px-3" /></label>
+                  <label className="flex flex-col gap-1">ราคา (บาท)<input name="price" type="number" min={0} step={1} defaultValue={Number(sel.price)} className="min-h-11 rounded-md border border-slate-300 px-3" /></label>
                   <label className="flex flex-col gap-1">เนื้อที่ (ตร.ว.)<input name="area_sqw" type="number" min={0} step={0.1} defaultValue={Number(sel.area_sqw) || ""} className="min-h-11 rounded-md border border-slate-300 px-3" /></label>
-                  <label className="flex flex-col gap-1">สถานะบ้าน
-                    <select name="house_status" defaultValue={String(sel.house_status)} className="min-h-11 rounded-md border border-slate-300 px-3">
-                      {S.HOUSE_STATUS.map((h) => <option key={h} value={h}>{S.HOUSE_LABEL[h]}</option>)}
-                    </select>
-                  </label>
+                  {autoHouse ? (
+                    <p className="text-xs text-slate-600">สถานะบ้านอัปเดตเองจากงวดงานในส่วนก่อสร้าง</p>
+                  ) : (
+                    <label className="flex flex-col gap-1">สถานะบ้าน
+                      <select name="house_status" defaultValue={String(sel.house_status)} className="min-h-11 rounded-md border border-slate-300 px-3">
+                        {S.HOUSE_STATUS.map((h) => <option key={h} value={h}>{S.HOUSE_LABEL[h]}</option>)}
+                      </select>
+                    </label>
+                  )}
                   {!buyer && (
                     <label className="flex flex-col gap-1">สถานะขาย (ตั้งเองได้เฉพาะ ว่าง / ให้เช่า)
                       <select name="sale_status" defaultValue={sel.sale_status === "rent" ? "rent" : "available"} className="min-h-11 rounded-md border border-slate-300 px-3">
@@ -250,7 +256,7 @@ export default async function PlotsPage({ searchParams }: { searchParams: Promis
           <label className="flex flex-col gap-1">จำนวนแปลง<input name="count" type="number" required min={1} max={300} defaultValue={12} className="min-h-11 rounded-md border border-slate-300 px-3" /></label>
           <label className="flex flex-col gap-1">เริ่มที่เลข<input name="start" type="number" min={1} defaultValue={1} className="min-h-11 rounded-md border border-slate-300 px-3" /></label>
           <label className="flex flex-col gap-1">แบบบ้าน<input name="house_type" placeholder="ชั้นเดียว 3 ห้องนอน" className="min-h-11 rounded-md border border-slate-300 px-3" /></label>
-          <label className="flex flex-col gap-1">ราคา (บาท)<input name="price" type="number" min={0} step={1000} className="min-h-11 rounded-md border border-slate-300 px-3" /></label>
+          <label className="flex flex-col gap-1">ราคา (บาท)<input name="price" type="number" min={0} step={1} className="min-h-11 rounded-md border border-slate-300 px-3" /></label>
           <button className="min-h-11 self-end rounded-md bg-brand-600 px-4 font-semibold text-white">เพิ่มแปลง</button>
           <p className="col-span-full text-xs text-slate-600">ตัวอย่าง: โซน A จำนวน 12 เริ่มที่ 1 → A01 ถึง A12 · รหัสที่มีอยู่แล้วจะถูกข้าม</p>
         </form>

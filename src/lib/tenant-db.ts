@@ -192,17 +192,18 @@ export function tenantDb(db: D1Like, projectId: string) {
 
     /** ส่งออกข้อมูลทั้งโครงการ (ลูกค้าส่งออกได้เสมอ) */
     async exportAll(): Promise<Record<TenantTable, Row[]>> {
-      const out = {} as Record<TenantTable, Row[]>;
-      for (const t of Object.keys(TENANT_TABLES) as TenantTable[]) {
+      // อ่านทุกตารางพร้อมกัน (เดิมทีละตาราง ส่งออกช้า)
+      const tables = Object.keys(TENANT_TABLES) as TenantTable[];
+      const all = await Promise.all(tables.map(async (t) => {
         const rows: Row[] = [];
         for (let off = 0; ; off += 2000) {
           const page = await this.list(t, { limit: 2000, offset: off });
           rows.push(...page);
           if (page.length < 2000) break;
         }
-        out[t] = rows;
-      }
-      return out;
+        return rows;
+      }));
+      return Object.fromEntries(tables.map((t, i) => [t, all[i]])) as Record<TenantTable, Row[]>;
     },
   };
 }

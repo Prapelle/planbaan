@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ProjectShell } from "@/components/ProjectShell";
 import { requireProject } from "@/lib/context";
+import { stageLabels } from "@/lib/sales";
 import { controlDb } from "@/lib/d1";
 import { listMembers } from "@/lib/control";
 import { ROLE_LABEL, type AccessRole } from "@/lib/roles";
@@ -17,15 +18,16 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
   const sp = await searchParams;
   const month = sp.month && /^\d{4}-(0[1-9]|1[0-2])$/.test(sp.month) ? sp.month : thisMonth();
   const members = await listMembers(controlDb(ctx.env), ctx.project.id);
-  const r = await teamReport(ctx.db, month, members);
+  const r = await teamReport(ctx.db, month, members, new Date(), ctx.project.kind);
   // ฝ่ายขายเห็นตัวเลขของตัวเองและยอดรวมทีม ไม่เห็นรายคนของคนอื่น
   const onlyMe = ctx.role === "sales";
   const rows = onlyMe ? r.rows.filter((x) => x.email === ctx.email) : r.rows;
   const isCurrent = month === thisMonth();
+  const L = stageLabels(ctx.project.kind);
   const cols: { k: keyof (typeof r.total); label: string; warn?: boolean }[] = [
     { k: "open", label: "ดูแลอยู่" }, { k: "stale", label: "ค้างติดต่อ", warn: true }, { k: "overdue", label: "นัดเลยกำหนด", warn: true },
-    { k: "newLeads", label: "ลูกค้าใหม่" }, { k: "contacts", label: "ติดต่อ" }, { k: "visits", label: "เข้าชม" },
-    { k: "bookings", label: "จอง" }, { k: "transfers", label: "โอน" }, { k: "lost", label: "ไม่ซื้อ" },
+    { k: "newLeads", label: "ลูกค้าใหม่" }, { k: "contacts", label: "ติดต่อ" }, { k: "visits", label: L.visited },
+    { k: "bookings", label: L.booked }, { k: "transfers", label: L.transferred }, { k: "lost", label: L.lost },
   ];
 
   return (
@@ -33,7 +35,7 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
       <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold">ผลงานรายคน</h1>
-          <p className="max-w-2xl text-sm text-slate-600">การติดต่อนับให้คนที่บันทึก เข้าชม จอง โอน นับให้ผู้ดูแลลูกค้า · ดูแลอยู่ ค้าง และนัดเลยกำหนด เป็นสถานะตอนนี้{onlyMe ? " · คุณเห็นเฉพาะตัวเลขของตัวเองและยอดรวมทีม" : ""}</p>
+          <p className="max-w-2xl text-sm text-slate-600">การติดต่อนับให้คนที่บันทึก {L.visited} {L.booked} {L.transferred} นับให้ผู้ดูแลลูกค้า · ดูแลอยู่ ค้าง และนัดเลยกำหนด เป็นสถานะตอนนี้{onlyMe ? " · คุณเห็นเฉพาะตัวเลขของตัวเองและยอดรวมทีม" : ""}</p>
         </div>
         <nav aria-label="เลือกเดือน" className="flex items-center gap-2 text-sm">
           <Link href={`/team?month=${shiftMonth(month, -1)}`} className="flex min-h-11 items-center rounded-md border border-slate-300 bg-white px-3">‹ ก่อนหน้า</Link>
@@ -48,7 +50,7 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
             <tr className="border-b border-slate-200">
               <th className="p-3 font-medium">ผู้ใช้</th>
               {cols.map((c) => <th key={c.k} className="p-3 text-right font-medium">{c.label}</th>)}
-              <th className="p-3 text-right font-medium">ลูกค้าใหม่ → จอง</th>
+              <th className="p-3 text-right font-medium">ลูกค้าใหม่ → {L.booked}</th>
             </tr>
           </thead>
           <tbody>

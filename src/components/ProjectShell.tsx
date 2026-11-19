@@ -43,7 +43,8 @@ async function badgeCounts(ctx: ProjectCtx) {
   const staleLead = new Date(now - (S_STALE_DAYS + 1) * 86400_000).toISOString();
   const staleBuild = new Date(now - (Number(ctx.project.build_stale_days ?? 7) + 1) * 86400_000).toISOString();
   try {
-    const specs: CountSpec[] = [{ table: "leads", notIn: { stage: ["lost", "transferred"], last_contact_at: [""] }, lt: { last_contact_at: staleLead } }];
+    const closed = ctx.project.kind === "builder" ? ["lost", "transferred", "loan"] : ["lost", "transferred"]; // รับสร้างบ้านขั้นก่อสร้างไม่นับค้าง
+    const specs: CountSpec[] = [{ table: "leads", notIn: { stage: closed, last_contact_at: [""] }, lt: { last_contact_at: staleLead } }];
     if (ctx.project.construction_enabled) specs.push({ table: "builds", where: { status: "active" }, lt: { last_update_at: staleBuild } });
     const [leads, build = 0] = await ctx.db.countMany(specs);
     return { leads: ctx.role === "foreman" ? 0 : leads, build };

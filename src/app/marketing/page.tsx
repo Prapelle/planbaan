@@ -96,11 +96,12 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
   const isCurrent = month === M.thisMonth();
   const maxTrend = Math.max(1, ...r.trend.map((t) => t.spend));
   const defaultDay = isCurrent ? bkkDate() : `${month}-01`;
+  const L = stageLabels(ctx.project.kind);
   const kpis = [
     { label: "ค่าโฆษณา", value: baht(r.total.spend), note: r.total.budget ? `งบ ${baht(r.total.budget)} · ใช้ ${Math.round((r.total.spend / r.total.budget) * 100)}%` : "ยังไม่ตั้งงบ" },
     { label: "ลูกค้าใหม่", value: baht(r.total.leads), note: `ต้นทุนต่อราย ${money(tc.perLead)}` },
-    { label: "เข้าชม", value: baht(r.total.visits), note: `ต้นทุนต่อการเข้าชม ${money(tc.perVisit)}` },
-    { label: "จอง", value: baht(r.total.bookings), note: `ต้นทุนต่อการจอง ${money(tc.perBooking)}` },
+    { label: L.visited, value: baht(r.total.visits), note: `ต้นทุนต่อ${L.visited} ${money(tc.perVisit)}` },
+    { label: L.booked, value: baht(r.total.bookings), note: `ต้นทุนต่อ${L.booked} ${money(tc.perBooking)}` },
   ];
 
   return (
@@ -108,7 +109,7 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
       <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold">การตลาด</h1>
-          <p className="text-sm text-slate-600">นับลูกค้าที่เข้ามาในเดือนนั้น แล้วดูว่าไปถึงขั้นไหน ลูกค้าที่เคยเข้าชมแล้วไม่ซื้อยังนับเป็นการเข้าชม{isCurrent ? " · เดือนนี้ยังไม่จบ ตัวเลขการจองจะเพิ่มขึ้นอีก" : ""}</p>
+          <p className="text-sm text-slate-600">นับลูกค้าที่เข้ามาในเดือนนั้น แล้วดูว่าไปถึงขั้นไหน ลูกค้าที่เคยถึงขั้น{L.visited}แล้ว{L.lost}ยังนับเป็น{L.visited}{isCurrent ? ` · เดือนนี้ยังไม่จบ ตัวเลข${L.booked}จะเพิ่มขึ้นอีก` : ""}</p>
         </div>
         <nav aria-label="เลือกเดือน" className="flex items-center gap-2 text-sm">
           <Link href={here(M.shiftMonth(month, -1))} className="flex min-h-11 items-center rounded-md border border-slate-300 bg-white px-3">‹ ก่อนหน้า</Link>
@@ -133,7 +134,7 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
         <table className="w-full min-w-[720px] text-sm">
           <thead className="text-left text-slate-600">
             <tr className="border-b border-slate-200">
-              {["ช่องทาง", "งบ", "ใช้จริง", "ลูกค้า", "เข้าชม", "จอง", "ต่อลูกค้า", "ต่อเข้าชม", "ต่อจอง"].map((h, i) => <th key={h} className={`p-3 font-medium ${i ? "text-right" : ""}`}>{h}</th>)}
+              {["ช่องทาง", "งบ", "ใช้จริง", "ลูกค้า", L.visited, L.booked, "ต่อลูกค้า", `ต่อ${L.visited}`, `ต่อ${L.booked}`].map((h, i) => <th key={h} className={`p-3 font-medium ${i ? "text-right" : ""}`}>{h}</th>)}
             </tr>
           </thead>
           <tbody>
@@ -171,7 +172,7 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
               <li key={t.month} className="grid grid-cols-[4.5rem_1fr_auto] items-center gap-3">
                 <Link href={here(t.month)} className={`underline-offset-2 hover:underline ${t.month === month ? "font-bold" : ""}`}>{thShort(t.month)}</Link>
                 <div className="h-4 rounded bg-slate-100" aria-hidden="true"><div className="h-4 rounded bg-brand-600" style={{ width: `${(t.spend / maxTrend) * 100}%` }} /></div>
-                <span className="whitespace-nowrap text-slate-700">{baht(t.spend)} บาท · ลูกค้า {t.leads} · ต่อจอง {money(c.perBooking)}</span>
+                <span className="whitespace-nowrap text-slate-700">{baht(t.spend)} บาท · ลูกค้า {t.leads} · ต่อ{L.booked} {money(c.perBooking)}</span>
               </li>
             );
           })}

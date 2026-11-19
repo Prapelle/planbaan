@@ -30,7 +30,7 @@ async function all(db: TenantDb, table: "leads" | "lead_activity", opts: { since
   }
 }
 
-export async function teamReport(db: TenantDb, month: string, members: { email: string; role: string }[], now = new Date()) {
+export async function teamReport(db: TenantDb, month: string, members: { email: string; role: string }[], now = new Date(), kind?: string) {
   const { start, end } = monthRange(month);
   const [leads, acts] = await Promise.all([all(db, "leads"), all(db, "lead_activity", { since: start, before: end })]);
   const today = bkkDate(now);
@@ -51,7 +51,7 @@ export async function teamReport(db: TenantDb, month: string, members: { email: 
     const p = person(String(l.owner_email));
     if (!isClosed(String(l.stage))) {
       p.open++;
-      if (isStale(l, now)) p.stale++;
+      if (isStale(l, now, kind)) p.stale++;
       if (l.next_follow_at && String(l.next_follow_at) < today) p.overdue++;
     }
     const c = String(l.created_at);

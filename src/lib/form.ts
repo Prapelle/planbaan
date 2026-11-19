@@ -9,8 +9,10 @@ export function back(path: string, p: { error?: string; msg?: string; extra?: Re
   if (p.error) u.set("error", p.error);
   if (p.msg) u.set("msg", p.msg);
   const qs = u.toString();
-  const h = p.hash ? `#${p.hash}` : "";
-  redirect((qs ? `${path}${path.includes("?") ? "&" : "?"}${qs}` : path) + h);
+  // path ที่มี #ส่วนในหน้า: query ต้องอยู่ก่อน # ไม่งั้นเบราว์เซอร์ไม่ส่ง error/msg มาที่หน้า
+  const [base, inPathHash = ""] = path.split("#", 2);
+  const hash = p.hash ?? inPathHash;
+  redirect((qs ? `${base}${base.includes("?") ? "&" : "?"}${qs}` : base) + (hash ? `#${hash}` : ""));
 }
 
 export const errMsg = (e: unknown) => (e instanceof Error ? e.message : "เกิดข้อผิดพลาด");

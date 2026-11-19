@@ -98,7 +98,7 @@ export async function removeSpend(db: TenantDb, id: string) {
 export async function clearSpend(db: TenantDb, monthRaw: string, channelRaw: string) {
   const month = checkMonth(monthRaw), channel = checkChannel(channelRaw);
   const rows = (await listAll(db, "marketing_spend", { month })).filter((r) => r.channel === channel);
-  for (const r of rows) await db.remove("marketing_spend", String(r.id));
+  await db.removeMany("marketing_spend", rows.map((r) => String(r.id)));
   return rows.length;
 }
 
@@ -137,7 +137,7 @@ const findCol = (header: string[], names: string[]) => {
 
 const MON: Record<string, number> = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12 };
 /** รองรับ 2026-11-01, 01/11/2026, 1/11/2569 (พ.ศ.), Nov 1, 2026, Sat, Nov 1, 2026 */
-export function parseDay(v: string): string | null {
+export function parseDay(v: string, order: "dmy" | "mdy" = "dmy"): string | null {
   const s = v.trim();
   const pad = (n: number) => String(n).padStart(2, "0");
   const fix = (y: number) => (y > 2400 ? y - 543 : y);
@@ -148,7 +148,7 @@ export function parseDay(v: string): string | null {
   let m = s.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/);
   if (m) return out(+m[1], +m[2], +m[3]);
   m = s.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})/);
-  if (m) return out(+m[3], +m[2], +m[1]); // วัน/เดือน/ปี แบบไทย
+  if (m) return order === "mdy" ? out(+m[3], +m[1], +m[2]) : out(+m[3], +m[2], +m[1]); // ค่าเริ่มต้น วัน/เดือน/ปี แบบไทย
   m = s.match(/([A-Za-z]{3})[a-z]*\.? (\d{1,2}),? (\d{4})/);
   if (m && MON[m[1].toLowerCase()]) return out(+m[3], MON[m[1].toLowerCase()], +m[2]);
   return null;
@@ -167,10 +167,14 @@ export function parseAdsCsv(text: string, channelRaw: string): ParseResult {
   if (norm(header[di]).includes("reporting starts") || norm(header[di]).includes("เริ่มต้นการรายงาน"))
     warnings.push("ไฟล์นี้ใช้วันเริ่มรายงาน ถ้าไม่ได้แยกรายวัน ค่าใช้จ่ายทั้งช่วงจะลงที่วันแรก");
   if (ki < 0) warnings.push("ไม่พบคอลัมน์ชื่อแคมเปญ รวมเป็นรายการเดียวต่อวัน");
+  // วันที่แบบ ตัวเลข/ตัวเลข/ปี: ดูทั้งไฟล์ ถ้าเลขตัวที่สองเกิน 12 แปลว่าเป็น เดือน/วัน/ปี (ไฟล์ภาษาอังกฤษแบบอเมริกัน)
+  const pairs = all.slice(hi + 1).map((r) => /^(\d{1,2})[-/.](\d{1,2})[-/.]\d{4}/.exec(String(r[di] ?? "").trim())).filter((x): x is RegExpExecArray => !!x);
+  const order: "dmy" | "mdy" = pairs.some((x) => +x[2] > 12) && !pairs.some((x) => +x[1] > 12) ? "mdy" : "dmy";
+  if (order === "mdy") warnings.push("ไฟล์นี้ใช้วันที่แบบ เดือน/วัน/ปี ระบบอ่านตามนั้นแล้ว");
   const rows: SpendRow[] = [];
   let skipped = 0;
   for (const r of all.slice(hi + 1)) {
-    const day = parseDay(r[di] ?? "");
+    const day = parseDay(r[di] ?? "", order);
     const rawCost = String(r[ci] ?? "").trim();
     if (!day || rawCost === "" || rawCost === "--") { skipped++; continue; } // แถวรวม แถวว่าง
     let amount: number;

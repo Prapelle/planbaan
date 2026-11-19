@@ -103,7 +103,7 @@ export default async function LeadPage({ params, searchParams }: { params: Promi
   const canApprove = canManagePromos(ctx.role, ctx.access.supportCanEdit) && !ctx.readonly;
   plots.sort(S.byCode);
   const stage = String(lead.stage) as S.Stage;
-  const stale = S.isStale(lead);
+  const stale = S.isStale(lead, new Date(), ctx.project.kind);
   const actorName = (a: unknown) => (members.some((m) => m.email === a) ? String(a).split("@")[0] : "ทีมช่วยเหลือ");
 
   return (

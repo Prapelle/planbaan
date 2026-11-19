@@ -37,7 +37,7 @@ async function revokeAction() {
   redirect("/support");
 }
 
-const fmt = (iso: string) => new Date(iso).toLocaleString("th-TH", { dateStyle: "medium", timeStyle: "short" });
+const fmt = (iso: string) => new Date(iso).toLocaleString("th-TH", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Bangkok" });
 
 export default async function SupportPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
   const ctx = await guard();

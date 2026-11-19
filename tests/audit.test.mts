@@ -103,3 +103,15 @@ await test("การ์ดงานก่อสร้าง: ผู้รับ
   await C.updateBuild(db, b.id, { ownerEmail: "" }, "o");
   assert.equal((await db.get("builds", b.id))!.owner_email, "");
 });
+
+await test("รอบสอง: แปลงให้เช่าจองไม่ได้ / ไฟล์โฆษณาวันที่แบบ เดือน/วัน/ปี / back() เก็บ # ไว้ท้าย", async () => {
+  await S.createPlotsBulk(db, { zone: "R", count: 1 });
+  await S.updatePlot(db, "R01", { saleStatus: "rent" });
+  const l = await S.createLead(db, { name: "อยากซื้อแปลงเช่า", plotCode: "R01" }, "s");
+  await rejects(S.moveLead(db, l.id, "booked", "s"), /ให้เช่า/);
+  const { parseAdsCsv } = await import("../src/lib/marketing");
+  const us = parseAdsCsv("Day,Cost\n11/13/2026,100\n11/2/2026,50\n", "google");
+  assert.deepEqual(us.rows.map((r) => r.day), ["2026-11-13", "2026-11-02"]);
+  const th = parseAdsCsv("วัน,ค่าใช้จ่าย\n13/11/2026,100\n02/11/2026,50\n", "google");
+  assert.deepEqual(th.rows.map((r) => r.day), ["2026-11-13", "2026-11-02"]);
+});

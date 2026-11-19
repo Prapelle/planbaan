@@ -107,7 +107,7 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
               <section key={stage} aria-label={S.stageLabels(ctx.project.kind)[stage]} className="flex min-w-0 flex-1 flex-col gap-2 rounded-lg bg-slate-200/70 p-2">
                 <h2 className="flex justify-between px-1 text-sm font-semibold"><span>{S.stageLabels(ctx.project.kind)[stage]}</span><span className="text-slate-600">{cards.length}</span></h2>
                 {cards.map((l) => {
-                  const stale = S.isStale(l, now);
+                  const stale = S.isStale(l, now, ctx.project.kind);
                   const prev = S.neighborStage(stage, -1), next = S.neighborStage(stage, 1);
                   return (
                     <article key={l.id} className="flex flex-col gap-1 rounded-md border border-slate-200 bg-white p-2 text-sm">

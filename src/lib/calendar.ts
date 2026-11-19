@@ -74,14 +74,15 @@ export async function monthItems(db: TenantDb, month: string, opts: { constructi
   const buildBy = new Map(builds.map((b) => [String(b.id), b]));
   for (const b of builds) {
     if (b.status === "done") continue;
-    if (inMonth(b.due_date)) items.push({ date: String(b.due_date), time: "", kind: "due", title: String(b.title), sub: b.customer_name ? `เจ้าของบ้าน ${b.customer_name}` : "", href: `/build/${b.id}` });
+    if (inMonth(b.due_date)) items.push({ date: String(b.due_date), time: "", kind: "due", title: String(b.title), sub: b.customer_name ? `เจ้าของบ้าน ${b.customer_name}` : "", href: `/build/${b.id}`, owner: String(b.owner_email ?? "") });
   }
   for (const s of stages) {
     const b = buildBy.get(String(s.build_id));
     if (!b || b.status === "done" || s.done_at || !inMonth(s.planned_end)) continue;
-    items.push({ date: String(s.planned_end), time: "", kind: "stage", title: `${b.title}: ${s.name}`, sub: "งวดงานครบกำหนด", href: `/build/${b.id}` });
+    items.push({ date: String(s.planned_end), time: "", kind: "stage", title: `${b.title}: ${s.name}`, sub: "งวดงานครบกำหนด", href: `/build/${b.id}`, owner: String(b.owner_email ?? "") });
   }
-  const shown = opts.mine ? items.filter((i) => i.kind === "stage" || i.kind === "due" || i.owner === opts.mine) : items;
+  // เฉพาะของฉัน: งานก่อสร้างที่ยังไม่กำหนดผู้รับผิดชอบยังแสดงให้ทุกคน
+  const shown = opts.mine ? items.filter((i) => i.owner === opts.mine || ((i.kind === "stage" || i.kind === "due") && !i.owner)) : items;
   const order: Record<CalKind, number> = { event: 0, follow: 1, loan: 2, due: 3, stage: 4 };
   return shown.sort((a, b) => a.date.localeCompare(b.date) || (a.time || "99").localeCompare(b.time || "99") || order[a.kind] - order[b.kind] || a.title.localeCompare(b.title, "th"));
 }

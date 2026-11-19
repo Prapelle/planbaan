@@ -54,21 +54,26 @@ async function ProjectHome() {
   const ctx = await requireProject({ action: "view", target: "/" });
   await ctx.usage("page_view", { page: "home" });
   const builder = ctx.project.kind === "builder";
-  const [o, board] = await Promise.all([
-    S.overview(ctx.db),
+  const month = S.bkkDate().slice(0, 7);
+  const [o, board, spendRows] = await Promise.all([
+    S.overview(ctx.db, new Date(), ctx.project.kind),
     ctx.project.construction_enabled ? C.buildBoard(ctx.db, Number(ctx.project.build_stale_days ?? 7)) : Promise.resolve(null),
+    ctx.db.list("marketing_spend", { where: { month }, limit: 2000, columns: ["amount"] }),
   ]);
+  // ต้นทุนต่อลูกค้าเดือนนี้ = ค่าโฆษณาเดือนนี้ ÷ ลูกค้าที่เข้ามาเดือนนี้ (ตามแผน: หน้าภาพรวมต้องเห็นต้นทุนต่อ lead)
+  const spend = spendRows.reduce((a, r) => a + Number(r.amount), 0);
+  const leadNote = `เดือนนี้ +${o.newThisMonth}${spend > 0 && o.newThisMonth > 0 ? ` · ต้นทุน ${Math.round(spend / o.newThisMonth).toLocaleString("th-TH")} บาท/ราย` : ""}`;
   const L = S.stageLabels(ctx.project.kind);
   const maxStage = Math.max(1, ...S.PIPELINE.map((s) => o.byStage[s]));
   const kpis = builder ? [
-    { label: "ลูกค้าทั้งหมด", value: o.totalLeads, note: `เดือนนี้ +${o.newThisMonth}` },
+    { label: "ลูกค้าทั้งหมด", value: o.totalLeads, note: leadNote },
     { label: `${L.visited}ขึ้นไป`, value: o.reachedVisit, note: "นับรวมขั้นที่เลยมาแล้ว" },
     { label: `${L.booked}ขึ้นไป`, value: o.reachedBooked, note: `${L.booked} ${L.loan} ${L.transferred}` },
     { label: L.transferred, value: o.transferred, note: "หลัง" },
     { label: "กำลังสร้าง", value: board?.counts.active ?? 0, note: board ? `ช้ากว่าแผน ${board.counts.late}` : "ยังไม่เปิดส่วนก่อสร้าง" },
     { label: `ค้างติดตามเกิน ${S.STALE_DAYS} วัน`, value: o.stale.length, note: "ราย" },
   ] : [
-    { label: "ลูกค้าทั้งหมด", value: o.totalLeads, note: `เดือนนี้ +${o.newThisMonth}` },
+    { label: "ลูกค้าทั้งหมด", value: o.totalLeads, note: leadNote },
     { label: "เข้าชมแล้วขึ้นไป", value: o.reachedVisit, note: "นับรวมขั้นที่เลยมาแล้ว" },
     { label: "จองขึ้นไป", value: o.reachedBooked, note: "จอง ยื่นกู้ และโอน" },
     { label: "โอนแล้ว", value: o.transferred, note: `จาก ${o.totalPlots} แปลง` },
