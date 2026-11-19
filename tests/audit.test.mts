@@ -86,3 +86,20 @@ await test("ไม่ซื้อต้องมีเหตุผล / อื�
   row = (await db.get("leads", l.id))!;
   assert.deepEqual([row.lost_reason, row.lost_note], ["", ""]);
 });
+
+await test("การ์ดงานก่อสร้าง: ผู้รับผิดชอบ วันเหลือถึงส่งมอบ เก็บเงินแล้วกี่ % รูปล่าสุด", async () => {
+  const b = await C.createBuild(db, { title: "บ้านทดสอบการ์ด", startDate: "2026-11-01", dueDate: "2026-12-31", ownerEmail: "Foreman@X.com " }, "o");
+  assert.equal((await db.get("builds", b.id))!.owner_email, "foreman@x.com");
+  const st = await C.stagesOf(db, b.id);
+  await C.updateStage(db, st[0].id, { payAmount: "300000" }, "o");
+  await C.updateStage(db, st[1].id, { payAmount: "700000" }, "o");
+  await C.setStageDone(db, st[0].id, true, "f");
+  await C.setPaid(db, st[0].id, true, "o");
+  await C.addPhoto(db, b.id, { key: `${C.photoPrefix(db.projectId, b.id)}a.jpg` }, "f");
+  await new Promise((r) => setTimeout(r, 5));
+  const p2 = await C.addPhoto(db, b.id, { key: `${C.photoPrefix(db.projectId, b.id)}b.jpg` }, "f");
+  const s = (await C.buildBoard(db, 7, new Date("2026-12-21T05:00:00Z"))).all.find((x) => x.build.id === b.id)!;
+  assert.deepEqual([s.paidPct, s.daysLeft, s.latestPhotoId], [30, 10, p2.id]);
+  await C.updateBuild(db, b.id, { ownerEmail: "" }, "o");
+  assert.equal((await db.get("builds", b.id))!.owner_email, "");
+});

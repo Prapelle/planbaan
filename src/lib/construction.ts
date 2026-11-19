@@ -57,7 +57,8 @@ async function syncPlot(db: TenantDb, build: Row, stages: Row[]): Promise<BatchO
 }
 const keep = (ops: (BatchOp | null)[]) => ops.filter((o): o is BatchOp => o !== null);
 
-export type NewBuild = { title?: string; plotCode?: string; leadId?: string; customerName?: string; startDate: string; dueDate: string; price?: string | number; stages?: string[] };
+export type NewBuild = { title?: string; plotCode?: string; leadId?: string; customerName?: string; startDate: string; dueDate: string; price?: string | number; stages?: string[]; ownerEmail?: string };
+const cleanEmail = (v: unknown) => txt(v, 200).toLowerCase();
 
 export async function createBuild(db: TenantDb, input: NewBuild, actor: string) {
   const start = day(input.startDate, "วันเริ่ม"), due = day(input.dueDate, "กำหนดส่งมอบ");
@@ -82,7 +83,7 @@ export async function createBuild(db: TenantDb, input: NewBuild, actor: string) 
   const id = crypto.randomUUID();
   const now = new Date().toISOString();
   const ops: BatchOp[] = [
-    { kind: "insert", table: "builds", id, data: { title, plot_code: plotCode, lead_id: leadId, customer_name: customer, start_date: start, due_date: due, contract_price: money(input.price), status: "active", show_delay: 1, last_update_at: now } },
+    { kind: "insert", table: "builds", id, data: { title, plot_code: plotCode, lead_id: leadId, customer_name: customer, start_date: start, due_date: due, contract_price: money(input.price), status: "active", show_delay: 1, last_update_at: now, owner_email: cleanEmail(input.ownerEmail) } },
     ...names.map((name, i): BatchOp => ({ kind: "insert", table: "build_stages", data: { build_id: id, seq: i + 1, name, planned_end: addDays(start, Math.round((span * (i + 1)) / names.length)) } })),
     logOp(id, "created", actor, `${names.length} งวด ส่งมอบ ${due}`),
   ];
@@ -90,7 +91,7 @@ export async function createBuild(db: TenantDb, input: NewBuild, actor: string) 
   return row;
 }
 
-export async function updateBuild(db: TenantDb, id: string, p: { title?: string; customerName?: string; dueDate?: string; price?: string; status?: string; showDelay?: boolean; note?: string }, actor: string) {
+export async function updateBuild(db: TenantDb, id: string, p: { title?: string; customerName?: string; dueDate?: string; price?: string; status?: string; showDelay?: boolean; note?: string; ownerEmail?: string }, actor: string) {
   const b = await getBuild(db, id);
   const patch: Record<string, unknown> = {};
   if (p.title !== undefined) { const t = txt(p.title, 120); if (!t) throw new Error("ต้องมีชื่องาน"); patch.title = t; }
@@ -100,6 +101,7 @@ export async function updateBuild(db: TenantDb, id: string, p: { title?: string;
   if (p.status !== undefined) { if (!["active", "paused"].includes(p.status) || b.status === "done") throw new Error("เปลี่ยนสถานะไม่ได้"); patch.status = p.status; }
   if (p.showDelay !== undefined) patch.show_delay = p.showDelay ? 1 : 0;
   if (p.note !== undefined) patch.note = txt(p.note, 2000);
+  if (p.ownerEmail !== undefined) patch.owner_email = cleanEmail(p.ownerEmail);
   await db.batch([{ kind: "update", table: "builds", id, patch }, logOp(id, "edit", actor)]);
 }
 
@@ -247,8 +249,10 @@ export type BuildSummary = {
   build: Row; stages: Row[]; pct: number; doneCount: number; current: Row | null; lateDays: number; overdueDays: number;
   idleDays: number; stale: boolean; payDue: number; payDueCount: number; paidTotal: number; payTotal: number;
   changesConfirmed: number; changesPending: number; drawPending: number;
+  /** วันที่เหลือถึงกำหนดส่งมอบ (ติดลบ = เลยกำหนด) · null เมื่อส่งมอบแล้ว */
+  daysLeft: number | null; paidPct: number; latestPhotoId: string;
 };
-export function summarize(build: Row, stages: Row[], changes: Row[], opts: { staleDays: number; now?: Date }): BuildSummary {
+export function summarize(build: Row, stages: Row[], changes: Row[], opts: { staleDays: number; now?: Date; latestPhotoId?: string }): BuildSummary {
   const today = bkkDate(opts.now);
   const doneCount = stages.filter((s) => s.done_at).length;
   const current = stages.find((s) => !s.done_at) ?? null;
@@ -268,6 +272,9 @@ export function summarize(build: Row, stages: Row[], changes: Row[], opts: { sta
     changesConfirmed: mine.filter((c) => c.status === "confirmed").reduce((a, c) => a + Number(c.amount), 0),
     changesPending: mine.filter((c) => c.status === "pending").length,
     drawPending: stages.filter((s) => s.done_at && Number(s.draw_amount) > 0 && s.draw_status !== "released").length,
+    daysLeft: build.status === "done" ? null : daysBetween(String(build.due_date), today),
+    paidPct: (() => { const t = stages.reduce((a, s) => a + Number(s.pay_amount), 0); return t > 0 ? Math.round((stages.filter((s) => s.paid_at).reduce((a, s) => a + Number(s.pay_amount), 0) / t) * 100) : 0; })(),
+    latestPhotoId: opts.latestPhotoId ?? "",
   };
 }
 
@@ -281,10 +288,15 @@ async function listAll(db: TenantDb, table: "builds" | "build_stages" | "build_c
 }
 
 export async function buildBoard(db: TenantDb, staleDays: number, now = new Date()) {
-  const [builds, stages, changes] = await Promise.all([listAll(db, "builds"), listAll(db, "build_stages"), listAll(db, "build_changes")]);
+  const [builds, stages, changes, photos] = await Promise.all([
+    listAll(db, "builds"), listAll(db, "build_stages"), listAll(db, "build_changes"),
+    db.list("build_photos", { columns: ["build_id"], orderBy: "created_at", desc: true, limit: 2000 }),
+  ]);
+  const latest = new Map<string, string>();
+  for (const ph of photos) if (!latest.has(String(ph.build_id))) latest.set(String(ph.build_id), ph.id);
   const byBuild = new Map<string, Row[]>();
   for (const s of stages) { const k = String(s.build_id); (byBuild.get(k) ?? byBuild.set(k, []).get(k)!).push(s); }
-  const all = builds.map((b) => summarize(b, (byBuild.get(b.id) ?? []).sort((x, y) => Number(x.seq) - Number(y.seq)), changes, { staleDays, now }));
+  const all = builds.map((b) => summarize(b, (byBuild.get(b.id) ?? []).sort((x, y) => Number(x.seq) - Number(y.seq)), changes, { staleDays, now, latestPhotoId: latest.get(b.id) }));
   const rank = (s: BuildSummary) => (s.build.status === "done" ? 3 : s.build.status === "paused" ? 2 : s.stale || s.lateDays || s.overdueDays ? 0 : 1);
   all.sort((a, b) => rank(a) - rank(b) || b.lateDays - a.lateDays || b.idleDays - a.idleDays || String(a.build.title).localeCompare(String(b.build.title), "th"));
   const live = all.filter((s) => s.build.status !== "done");

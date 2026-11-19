@@ -7,7 +7,7 @@ import { PhotoUpload } from "@/components/PhotoUpload";
 import { BuildTabs } from "@/components/BuildTabs";
 import { requireProject } from "@/lib/context";
 import { controlDb } from "@/lib/d1";
-import { activeShareLink, createShareLink, revokeShareLinks } from "@/lib/control";
+import { activeShareLink, createShareLink, revokeShareLinks, listMembers } from "@/lib/control";
 import { back, baht, errMsg, fv } from "@/lib/form";
 import { canManageBuild, canSeeCosts, canUpdateBuild } from "@/lib/roles";
 import { sniffImage } from "@/lib/planmap";
@@ -96,10 +96,13 @@ async function drawAction(f: FormData) {
 async function buildEditAction(f: FormData) {
   "use server";
   const id = fv(f, "build");
-  await run(id, "manage", (c) => C.updateBuild(c.db, id, {
+  await run(id, "manage", async (c) => {
+    const owner = fv(f, "owner");
+    if (owner && !(await listMembers(controlDb(c.env), c.project.id)).some((m) => m.email === owner)) throw new Error("ผู้รับผิดชอบต้องเป็นผู้ใช้ในโครงการ");
+    return C.updateBuild(c.db, id, { ownerEmail: owner,
     title: fv(f, "title"), customerName: fv(f, "customer"), dueDate: fv(f, "due"), price: fv(f, "price"), note: fv(f, "note"),
     showDelay: f.get("show_delay") === "1", ...(f.get("status") ? { status: fv(f, "status") } : {}),
-  }, c.email), "บันทึกข้อมูลงานแล้ว");
+  }, c.email); }, "บันทึกข้อมูลงานแล้ว");
 }
 async function changeAction(f: FormData) {
   "use server";
@@ -151,13 +154,15 @@ export default async function BuildDetail({ params, searchParams }: { params: Pr
   const build = await ctx.db.get("builds", id);
   if (!build) notFound();
   await ctx.usage("page_view", { page: "build_detail" });
-  const [stages, photos, changes, log, link] = await Promise.all([
+  const [stages, photos, changes, log, link, members] = await Promise.all([
     C.stagesOf(ctx.db, id),
     ctx.db.list("build_photos", { where: { build_id: id }, limit: 500, orderBy: "created_at", desc: true }),
     ctx.db.list("build_changes", { where: { build_id: id }, limit: 200, orderBy: "created_at", desc: true }),
     ctx.db.list("build_log", { where: { build_id: id }, limit: 50, orderBy: "created_at", desc: true }),
     activeShareLink(controlDb(ctx.env), ctx.project.id, id),
+    listMembers(controlDb(ctx.env), ctx.project.id),
   ]);
+  const staff = members.filter((m) => ["owner", "manager", "foreman"].includes(m.role) || m.email === build.owner_email);
   const s = C.summarize(build, stages, changes, { staleDays: Number(ctx.project.build_stale_days ?? 7) });
   const canUpdate = canUpdateBuild(ctx.role, ctx.access.supportCanEdit) && !ctx.readonly && build.status !== "done";
   const canManage = canManageBuild(ctx.role, ctx.access.supportCanEdit) && !ctx.readonly;
@@ -373,6 +378,12 @@ export default async function BuildDetail({ params, searchParams }: { params: Pr
             <h2 className="font-semibold sm:col-span-2">ข้อมูลงาน</h2>
             <label className="flex flex-col gap-1">ชื่องาน<input name="title" defaultValue={String(build.title)} className={input} /></label>
             <label className="flex flex-col gap-1">เจ้าของบ้าน<input name="customer" defaultValue={String(build.customer_name)} className={input} /></label>
+            <label className="flex flex-col gap-1">ผู้รับผิดชอบ
+              <select name="owner" defaultValue={String(build.owner_email ?? "")} className={input}>
+                <option value="">ยังไม่กำหนด</option>
+                {staff.map((m) => <option key={m.email} value={m.email}>{m.email}</option>)}
+              </select>
+            </label>
             <label className="flex flex-col gap-1">กำหนดส่งมอบ<input type="date" name="due" defaultValue={String(build.due_date)} className={input} /></label>
             <label className="flex flex-col gap-1">ราคาสัญญา<input name="price" inputMode="decimal" defaultValue={Number(build.contract_price) || ""} className={input} /></label>
             {build.status !== "done" && (
