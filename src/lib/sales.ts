@@ -3,6 +3,7 @@
  * ทุกฟังก์ชันรับ TenantDb ที่ผูกโครงการแล้ว จึงทำงานได้เฉพาะในโครงการนั้น
  */
 import type { BatchOp, TenantDb } from "./tenant-db";
+import { assertDiscountOk } from "./promotions";
 
 // ── ค่ามาตรฐาน (ไม่ให้แต่ละโครงการปรับเอง) ──
 export const STAGES = ["new", "contacted", "visit_scheduled", "visited", "booked", "loan", "transferred", "lost"] as const;
@@ -221,7 +222,9 @@ export async function moveLead(db: TenantDb, id: string, stageRaw: string, actor
   if (stage === from) return;
   const plot = String(lead.plot_code);
   if (opts.requirePlot !== false && stageIdx(stage) >= BOOKED_IDX && !plot) throw new Error("เลือกแปลงให้ลูกค้าก่อนเลื่อนไปขั้นจอง");
-  const st = await plotState(db, plot, id);
+  // เข้าขั้นจองครั้งแรก: ส่วนลดเกินเกณฑ์ต้องได้รับอนุมัติก่อน (อ่านพร้อมสถานะแปลงในรอบเดียว)
+  const crossing = !!plot && stageIdx(stage) >= BOOKED_IDX && stageIdx(from) < BOOKED_IDX;
+  const [st] = await Promise.all([plotState(db, plot, id), crossing ? assertDiscountOk(db, lead) : Promise.resolve()]);
   checkPlotState(plot, st, stage);
   await db.batch(keep([
     { kind: "update", table: "leads", id, patch: { stage, last_contact_at: new Date().toISOString(), max_stage: Math.max(Number(lead.max_stage ?? 0), stageIdx(stage)) } },

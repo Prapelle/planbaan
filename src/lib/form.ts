@@ -4,12 +4,13 @@ import { redirect } from "next/navigation";
 export const fv = (f: FormData, k: string) => String(f.get(k) ?? "");
 
 /** กลับไปหน้าเดิมพร้อมข้อความ (ใช้ใน server action) */
-export function back(path: string, p: { error?: string; msg?: string; extra?: Record<string, string> }): never {
+export function back(path: string, p: { error?: string; msg?: string; extra?: Record<string, string>; hash?: string }): never {
   const u = new URLSearchParams(p.extra ?? {});
   if (p.error) u.set("error", p.error);
   if (p.msg) u.set("msg", p.msg);
   const qs = u.toString();
-  redirect(qs ? `${path}${path.includes("?") ? "&" : "?"}${qs}` : path);
+  const h = p.hash ? `#${p.hash}` : "";
+  redirect((qs ? `${path}${path.includes("?") ? "&" : "?"}${qs}` : path) + h);
 }
 
 export const errMsg = (e: unknown) => (e instanceof Error ? e.message : "เกิดข้อผิดพลาด");

@@ -85,6 +85,20 @@ export default async function GuidePage() {
     </>,
   };
 
+  const promos: Sec = {
+    id: "promos", title: "ราคาขายและโปรโมชั่น", body: <>
+      <P>เลือกแปลงให้ลูกค้าแล้ว หน้าลูกค้าจะแสดง<b>ราคาตั้งของแปลง</b> พร้อมกล่องราคาและโปรโมชั่น</P>
+      <Steps items={[
+        <>ถ้าขายต่ำกว่าราคาตั้ง ใส่ <b>ราคาขายจริง</b> ในฟอร์มข้อมูลลูกค้าแล้วกดบันทึก (เว้นว่าง = ขายตามราคาตั้ง)</>,
+        <>กดปุ่มโปรที่ตั้งไว้ เช่น <b>+ ฟรีค่าโอน</b> ใส่มูลค่าในช่องข้างปุ่มก่อนกด ถ้าไม่มีในรายการ กด <b>เพิ่มโปรโมชั่นอื่น</b> แล้วพิมพ์เอง</>,
+        <>ระบบรวมส่วนลดให้เป็นบาทและ % ของราคาตั้ง ถ้าเกินเกณฑ์ (เริ่มต้น 3%) ต้องให้เจ้าของหรือผู้จัดการเปิดหน้าลูกค้าแล้วกด <b>อนุมัติส่วนลด</b> ก่อน จึงเลื่อนไปขั้น{L.booked}ได้</>,
+        <>อนุมัติแล้วถ้าลดเพิ่มอีก ต้องอนุมัติใหม่</>,
+      ]} />
+      <P>เจ้าของและผู้จัดการตั้งรายการโปร วันหมดเขต และเกณฑ์อนุมัติที่เมนู <Go href="/promotions">โปรโมชั่น</Go> โปรที่หมดเขตหรือปิดไว้จะไม่ขึ้นให้ฝ่ายขายเลือก แต่ลูกค้าที่ใช้ไปแล้วยังอยู่ครบ</P>
+      <Tip>ในหน้ากำไรรายหลัง รายรับคือราคาขายจริงหักส่วนลดเงินสด ของแถมนับเป็นต้นทุนหมวดของแถม ฟรีค่าโอนนับเป็นต้นทุนหมวดค่าโอน ไม่ต้องกรอกซ้ำ</Tip>
+    </>,
+  };
+
   const loans: Sec = {
     id: "loans", title: "สินเชื่อ", body: <>
       <P>ลูกค้าที่ถึงขั้น{L.booked}จะอยู่ในเมนูสินเชื่อ ระบบเก็บแค่ว่าเอกสารครบหรือไม่ <b>ไม่ต้องและไม่ควรอัปโหลดไฟล์เอกสาร</b></P>
@@ -200,7 +214,7 @@ export default async function GuidePage() {
 
   const sections: Sec[] = foreman
     ? [start, buildForeman, help]
-    : [start, calendar, ...(builder ? [] : [plots]), leads, ...(builder ? [] : [loans]), build, ...(buildOn && canSeeCosts(ctx.role) ? [costs] : []), marketing, team, ...(boss ? [settings, plan] : [settings]), help];
+    : [start, calendar, ...(builder ? [] : [plots]), leads, ...(builder ? [] : [promos, loans]), build, ...(buildOn && canSeeCosts(ctx.role) ? [costs] : []), marketing, team, ...(boss ? [settings, plan] : [settings]), help];
 
   return (
     <ProjectShell ctx={ctx} active="/guide">

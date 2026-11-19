@@ -14,5 +14,6 @@ echo "== archive / plan map / back office"; npx tsx tests/archive-map-office.tes
 echo "== construction (ก่อสร้าง)"; npx tsx tests/construction.test.mts
 echo "== costs (ต้นทุนและกำไร)"; npx tsx tests/costs.test.mts
 echo "== calendar (ปฏิทิน)"; npx tsx tests/calendar.test.mts
+echo "== promotions (ราคาขายและโปรโมชั่น)"; npx tsx tests/promotions.test.mts
 echo "== host / usage / backup"; npx tsx tests/host-usage-backup.test.mts
 echo "ทุกเทสต์ผ่าน"

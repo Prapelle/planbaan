@@ -66,7 +66,7 @@ export default async function BuildCosts({ params, searchParams }: { params: Pro
         <div className="flex flex-col gap-1 border-b border-slate-100 p-5 sm:border-b-0 sm:border-r">
           <span className="text-[13px] text-slate-600">รายรับ</span>
           <span className="text-[26px] font-bold tabular-nums">{baht(r.revenue)}</span>
-          <span className="text-xs text-slate-600">ราคาขาย {baht(r.revenue - confirmed)}{confirmed ? ` ${confirmed > 0 ? "+" : "−"} งานเพิ่ม-ลดที่ยืนยัน ${baht(Math.abs(confirmed))}` : ""}</span>
+          <span className="text-xs text-slate-600">ราคาขาย {baht(r.salePrice)}{r.cashDiscount ? ` − ส่วนลดเงินสด ${baht(r.cashDiscount)}` : ""}{confirmed ? ` ${confirmed > 0 ? "+" : "−"} งานเพิ่ม-ลดที่ยืนยัน ${baht(Math.abs(confirmed))}` : ""}</span>
         </div>
         <div className="flex flex-col gap-1 border-b border-slate-100 p-5 sm:border-b-0 sm:border-r">
           <span className="text-[13px] text-slate-600">ต้นทุน{r.done ? "ทั้งหมด" : "ถึงวันนี้"}</span>
@@ -106,7 +106,8 @@ export default async function BuildCosts({ params, searchParams }: { params: Pro
                     {l.auto && <div className="text-xs text-slate-600">{
                       l.cat === "land" ? (rep.landMode === "area" ? `ราคาที่ดินรวม หารตามเนื้อที่ ${plotArea} ตร.ว.` : "ใส่รายแปลงที่หน้ากำไรรายหลัง")
                       : l.cat === "shared" ? (rep.sharedMode === "area" ? `ค่าส่วนกลาง หารตามเนื้อที่ ${plotArea} ตร.ว.` : `ค่าส่วนกลาง ÷ ${rep.sharedDiv} แปลง`)
-                      : "ระบบคิดจากต้นทุนต่อการจองของช่องทางลูกค้า"}</div>}</td>
+                      : "ระบบคิดจากต้นทุนต่อการจองของช่องทางลูกค้า"}</div>}
+                    {l.promo > 0 && <div className="text-xs text-slate-600">รวมโปรโมชั่นจากหน้าลูกค้า {baht(l.promo)}{r.leadId && <> · <Link href={`/leads/${r.leadId}#price`} className="text-brand-700 underline">ดู</Link></>}</div>}</td>
                   <td className="px-3 py-2.5 text-right tabular-nums">{l.budget ? baht(l.budget) : "–"}</td>
                   <td className={`px-3 py-2.5 text-right font-semibold tabular-nums ${over ? "text-red-700" : ""}`}>{l.actual ? baht(l.actual) : "–"}</td>
                   <td className="px-3 py-2.5">

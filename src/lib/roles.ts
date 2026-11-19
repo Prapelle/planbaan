@@ -43,3 +43,6 @@ export const canManageBuild = (r: AccessRole, supportCanEdit = false) =>
 /** ต้นทุนและกำไร: ข้อมูลลับของเจ้าของ เห็นเฉพาะเจ้าของโครงการ บัญชี และทีมช่วยเหลือที่ลูกค้าเปิดสิทธิ์ให้ */
 export const canSeeCosts = (r: AccessRole) => r === "owner" || r === "accountant" || r === "support";
 export const canEditCosts = (r: AccessRole, supportCanEdit = false) => r === "owner" || r === "accountant" || (r === "support" && supportCanEdit);
+
+/** ชุดโปรโมชั่นและเกณฑ์อนุมัติ · อนุมัติส่วนลดเกินเกณฑ์ */
+export const canManagePromos = (r: AccessRole, supportCanEdit = false) => r === "owner" || r === "manager" || (r === "support" && supportCanEdit);

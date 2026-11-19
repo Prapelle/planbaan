@@ -30,6 +30,9 @@ for (const [T, tag] of [[A, "a"], [B, "b"]] as const) {
   await T.insert("cost_budgets", { house_type: "", category: "material", amount: 1 });
   await T.insert("cost_settings", { key: "shared_total", value: "1" });
   await T.insert("events", { title: `นัด ${tag}`, event_date: "2026-12-01", event_month: "2026-12" });
+  await T.insert("promotions", { name: `โปร ${tag}`, kind: "gift", default_value: 1 });
+  await T.insert("lead_promos", { lead_id: "x", name: `แอร์ ${tag}`, kind: "gift", value: 1 });
+  await T.insert("project_settings", { key: "approve_pct", value: "3" });
 }
 await B.insert("marketing_budget", { month: "2026-11", channel: "facebook", amount: 2 });
 await B.insert("loan_apps", { lead_id: bL.id, bank: "ออมสิน" });

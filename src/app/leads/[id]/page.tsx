@@ -6,8 +6,9 @@ import { requireProject } from "@/lib/context";
 import { controlDb } from "@/lib/d1";
 import { listMembers } from "@/lib/control";
 import { back, errMsg, fv } from "@/lib/form";
-import { canEditData } from "@/lib/roles";
+import { canEditData, canManagePromos } from "@/lib/roles";
 import * as S from "@/lib/sales";
+import * as P from "@/lib/promotions";
 
 export const dynamic = "force-dynamic";
 
@@ -26,6 +27,7 @@ async function saveAction(f: FormData) {
       name: fv(f, "name"), phone: fv(f, "phone"), channel: fv(f, "channel"), plotCode: fv(f, "plot_code"),
       ownerEmail: fv(f, "owner_email"), nextFollowAt: fv(f, "next_follow_at"), note: fv(f, "note"),
     }, ctx.email);
+    if (f.has("sale_price")) await P.setSalePrice(ctx.db, id, fv(f, "sale_price"));
     // ใส่บันทึกการติดต่อมาด้วย = นับเป็นการติดต่อ (รีเซ็ตวันค้างติดตาม)
     if (fv(f, "contact")) await S.logContact(ctx.db, id, fv(f, "contact"), ctx.email);
   } catch (e) { back(`/leads/${id}`, { error: errMsg(e) }); }
@@ -45,7 +47,42 @@ async function stageAction(f: FormData) {
   back(`/leads/${id}`, { msg: `เปลี่ยนเป็น ${S.stageLabels(ctx.project.kind)[fv(f, "stage") as S.Stage]} แล้ว` });
 }
 
+async function addPromoAction(f: FormData) {
+  "use server";
+  const id = fv(f, "id");
+  const ctx = await guardEdit(id);
+  try {
+    await P.addLeadPromo(ctx.db, id, { promoId: fv(f, "promo_id") || undefined, name: fv(f, "name"), kind: fv(f, "kind"), value: fv(f, "value") }, ctx.email);
+  } catch (e) { back(`/leads/${id}`, { error: errMsg(e), hash: "price" }); }
+  revalidatePath(`/leads/${id}`);
+  back(`/leads/${id}`, { msg: "เพิ่มโปรโมชั่นแล้ว", hash: "price" });
+}
 
+async function removePromoAction(f: FormData) {
+  "use server";
+  const id = fv(f, "id");
+  const ctx = await guardEdit(id);
+  try {
+    const row = await ctx.db.get("lead_promos", fv(f, "promo"));
+    if (!row || row.lead_id !== id) throw new Error("ไม่พบรายการ");
+    await P.removeLeadPromo(ctx.db, row.id);
+  } catch (e) { back(`/leads/${id}`, { error: errMsg(e), hash: "price" }); }
+  revalidatePath(`/leads/${id}`);
+  back(`/leads/${id}`, { msg: "เอาโปรโมชั่นออกแล้ว", hash: "price" });
+}
+
+async function approveAction(f: FormData) {
+  "use server";
+  const id = fv(f, "id");
+  const ctx = await requireProject({ action: "edit", target: `/leads/${id}` });
+  if (!canManagePromos(ctx.role, ctx.access.supportCanEdit) || ctx.readonly) back(`/leads/${id}`, { error: "เจ้าของหรือผู้จัดการเท่านั้นที่อนุมัติส่วนลดได้" });
+  let pct = 0;
+  try { pct = (await P.approveDiscount(ctx.db, id, ctx.email)).pct; } catch (e) { back(`/leads/${id}`, { error: errMsg(e) }); }
+  revalidatePath(`/leads/${id}`);
+  back(`/leads/${id}`, { msg: `อนุมัติส่วนลด ${pct.toFixed(1)}% แล้ว`, hash: "price" });
+}
+
+const baht = (n: number) => n.toLocaleString("th-TH", { maximumFractionDigits: 2 });
 const when = (iso: unknown) => new Date(String(iso)).toLocaleString("th-TH", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Bangkok" });
 const KIND: Record<string, string> = { created: "เพิ่มลูกค้า", stage: "เปลี่ยนขั้น", contact: "ติดต่อ", edit: "แก้ไขข้อมูล", loan: "สินเชื่อ" };
 
@@ -56,9 +93,14 @@ export default async function LeadPage({ params, searchParams }: { params: Promi
   if (!lead) notFound();
   const { error, msg } = await searchParams;
   const canEdit = (canEditData(ctx.role, ctx.access.supportCanEdit) && !ctx.readonly);
-  const [plots, members, history] = await Promise.all([
+  const priced = ctx.project.kind !== "builder" && !!lead.plot_code;
+  const [plots, members, history, price, promoRows] = await Promise.all([
     ctx.db.list("plots", { limit: 2000 }), listMembers(controlDb(ctx.env), ctx.project.id), S.leadHistory(ctx.db, id),
+    priced ? P.priceFor(ctx.db, lead) : Promise.resolve(null),
+    priced && canEdit ? P.catalog(ctx.db) : Promise.resolve([]),
   ]);
+  const chips = P.available(promoRows, S.bkkDate());
+  const canApprove = canManagePromos(ctx.role, ctx.access.supportCanEdit) && !ctx.readonly;
   plots.sort(S.byCode);
   const stage = String(lead.stage) as S.Stage;
   const stale = S.isStale(lead);
@@ -107,6 +149,12 @@ export default async function LeadPage({ params, searchParams }: { params: Promi
                 {plots.map((p) => <option key={p.id} value={String(p.code)}>{String(p.code)} · {S.SALE_LABEL[p.sale_status as S.SaleStatus]}</option>)}
               </select>
             </label>
+            {price && (
+              <label className="flex flex-col gap-1">ราคาขายจริง (บาท)
+                <input name="sale_price" inputMode="decimal" defaultValue={Number(lead.sale_price) > 0 ? String(lead.sale_price) : ""} placeholder={`ราคาตั้ง ${baht(price.summary.list)}`} className="min-h-11 rounded-md border border-slate-300 px-3" />
+                <span className="text-xs text-slate-600">เว้นว่าง = ขายตามราคาตั้ง</span>
+              </label>
+            )}
             <label className="flex flex-col gap-1">ผู้ดูแล
               <select name="owner_email" defaultValue={String(lead.owner_email)} className="min-h-11 rounded-md border border-slate-300 px-3">
                 {!members.some((m) => m.email === lead.owner_email) && <option value={String(lead.owner_email)}>{String(lead.owner_email) || "ไม่ระบุ"}</option>}
@@ -128,6 +176,7 @@ export default async function LeadPage({ params, searchParams }: { params: Promi
         </form>
 
         <div className="flex flex-1 flex-col gap-4">
+          {price && <PriceBox id={id} p={price} chips={chips} canEdit={canEdit} canApprove={canApprove} actorName={actorName} />}
           <section className="rounded-lg border border-slate-200 bg-white p-4 text-sm">
             <h2 className="mb-2 font-semibold">ประวัติ</h2>
             {S.daysSince(String(lead.created_at)) > Number(process.env.ARCHIVE_DAYS ?? 365) && (
@@ -149,5 +198,86 @@ export default async function LeadPage({ params, searchParams }: { params: Promi
         </div>
       </div>
     </ProjectShell>
+  );
+}
+
+type Price = Awaited<ReturnType<typeof P.priceFor>>;
+function PriceBox({ id, p, chips, canEdit, canApprove, actorName }: {
+  id: string; p: Price; chips: Record<string, unknown>[]; canEdit: boolean; canApprove: boolean; actorName: (a: unknown) => string;
+}) {
+  const s = p.summary;
+  const row = (label: string, v: number, minus = true) => v > 0 && (
+    <div className="flex justify-between gap-2"><dt>{label}</dt><dd className="tabular-nums">{minus ? "−" : ""}{baht(v)}</dd></div>
+  );
+  return (
+    <section id="price" className="scroll-mt-4 rounded-lg border border-slate-200 bg-white p-4 text-sm">
+      <h2 className="mb-1 font-semibold">ราคาและโปรโมชั่น</h2>
+      <p className="mb-3 text-slate-700">ราคาตั้งของแปลง <b className="tabular-nums">{baht(s.list)}</b> บาท{s.list <= 0 && <span className="text-amber-700"> · แปลงนี้ยังไม่ใส่ราคา</span>}</p>
+
+      {p.promos.length > 0 && (
+        <ul className="mb-3 flex flex-col gap-1">
+          {p.promos.map((x) => (
+            <li key={x.id} className="flex items-center justify-between gap-2 rounded-md bg-slate-50 px-3 py-2">
+              <span>{String(x.name)} <span className="text-xs text-slate-600">· {P.PROMO_KIND_LABEL[x.kind as P.PromoKind]}</span></span>
+              <span className="flex items-center gap-2"><span className="tabular-nums">{baht(Number(x.value))}</span>
+                {canEdit && (
+                  <form action={removePromoAction}><input type="hidden" name="id" value={id} /><input type="hidden" name="promo" value={x.id} />
+                    <button aria-label={`เอา ${String(x.name)} ออก`} className="min-h-9 min-w-9 rounded-md text-slate-500 hover:bg-slate-200 hover:text-red-700">✕</button></form>
+                )}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {canEdit && (
+        <div className="mb-3">
+          {chips.length > 0 && (
+            <div className="mb-2 flex flex-wrap gap-2" aria-label="เลือกโปรโมชั่น">
+              {chips.map((c) => (
+                <form key={String(c.id)} action={addPromoAction} className="flex items-center overflow-hidden rounded-full border border-brand-300 bg-brand-50">
+                  <input type="hidden" name="id" value={id} /><input type="hidden" name="promo_id" value={String(c.id)} />
+                  <button className="min-h-10 pl-3 pr-2 font-medium text-brand-800 hover:bg-brand-100">+ {String(c.name)}</button>
+                  <input name="value" inputMode="decimal" aria-label={`มูลค่า ${String(c.name)}`} defaultValue={Number(c.default_value) > 0 ? String(c.default_value) : ""} placeholder="มูลค่า" className="h-10 w-24 border-l border-brand-200 bg-white px-2 text-right" />
+                </form>
+              ))}
+            </div>
+          )}
+          <details>
+            <summary className="min-h-10 cursor-pointer py-2 font-medium text-brand-700">เพิ่มโปรโมชั่นอื่น</summary>
+            <form action={addPromoAction} className="mt-1 grid grid-cols-1 gap-2 sm:grid-cols-[1fr_auto_auto_auto]">
+              <input type="hidden" name="id" value={id} />
+              <input name="name" required maxLength={80} placeholder="ชื่อ เช่น ผ้าม่านทั้งหลัง" aria-label="ชื่อโปรโมชั่น" className="min-h-10 rounded-md border border-slate-300 px-3" />
+              <select name="kind" aria-label="ประเภท" defaultValue="gift" className="min-h-10 rounded-md border border-slate-300 px-2">
+                {P.PROMO_KINDS.map((k) => <option key={k} value={k}>{P.PROMO_KIND_LABEL[k]}</option>)}
+              </select>
+              <input name="value" required inputMode="decimal" placeholder="มูลค่า" aria-label="มูลค่า (บาท)" className="min-h-10 w-full rounded-md border border-slate-300 px-3 text-right sm:w-28" />
+              <button className="min-h-10 rounded-md bg-brand-600 px-3 font-semibold text-white hover:bg-brand-700">เพิ่ม</button>
+            </form>
+          </details>
+        </div>
+      )}
+
+      <dl className="flex flex-col gap-1 border-t border-slate-200 pt-3">
+        {row("ลดจากราคาตั้ง", s.priceCut)}
+        {row("ส่วนลดเงินสด", s.cash)}
+        {row("ของแถม", s.gift)}
+        {row("ฟรีค่าโอน/จดจำนอง", s.transfer)}
+        <div className="flex justify-between gap-2 font-semibold"><dt>ส่วนลดรวม</dt><dd className="tabular-nums">{baht(s.totalDiscount)} <span className={s.pct > s.threshold ? "text-amber-700" : "text-slate-600"}>({s.pct.toFixed(1)}%)</span></dd></div>
+        <div className="flex justify-between gap-2"><dt>รายรับสุทธิ (ราคาขาย − ส่วนลดเงินสด)</dt><dd className="font-semibold tabular-nums">{baht(s.netRevenue)}</dd></div>
+      </dl>
+      <p className="mt-1 text-xs text-slate-600">ของแถมและฟรีค่าโอนนับเป็นต้นทุนของหลังนี้ในหน้ากำไรให้เอง</p>
+
+      {s.needsApproval && (
+        <div role="status" className="mt-3 rounded-md border border-amber-300 bg-amber-50 p-3">
+          <p className="font-semibold text-amber-900">ส่วนลดเกินเกณฑ์ {s.threshold}% ต้องให้ผู้จัดการอนุมัติก่อนเลื่อนไปขั้นจอง</p>
+          {s.approvedBy && <p className="text-xs text-amber-900">เคยอนุมัติไว้ {baht(Number(p.lead.discount_approved))} บาท แต่ส่วนลดเพิ่มขึ้นหลังจากนั้น</p>}
+          {canApprove ? (
+            <form action={approveAction} className="mt-2"><input type="hidden" name="id" value={id} />
+              <button className="min-h-11 rounded-md bg-amber-600 px-4 font-semibold text-white hover:bg-amber-700">อนุมัติส่วนลด {baht(s.totalDiscount)} บาท</button></form>
+          ) : <p className="mt-1 text-amber-900">แจ้งเจ้าของหรือผู้จัดการให้เปิดหน้านี้แล้วกดอนุมัติ</p>}
+        </div>
+      )}
+      {s.approved && <p className="mt-3 text-xs text-emerald-800">อนุมัติส่วนลดแล้วโดย {actorName(s.approvedBy)} · {when(s.approvedAt)}</p>}
+    </section>
   );
 }

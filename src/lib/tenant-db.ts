@@ -12,7 +12,7 @@ import { type D1Like, type D1Stmt, nowIso } from "./d1";
 export const TENANT_TABLES = {
   plots: ["code", "zone", "house_type", "price", "house_status", "sale_status", "map_x", "map_y", "land_cost", "area_sqw"],
   leads: ["name", "phone", "channel", "stage", "plot_code", "owner_email", "last_contact_at", "note", "next_follow_at",
-    "loan_docs", "debt_reason", "debt_plan", "debt_retry_at", "debt_since", "max_stage"],
+    "loan_docs", "debt_reason", "debt_plan", "debt_retry_at", "debt_since", "max_stage", "sale_price", "discount_approved", "discount_approved_by", "discount_approved_at"],
   lead_activity: ["lead_id", "kind", "from_stage", "to_stage", "note", "actor"],
   loan_apps: ["lead_id", "bank", "status", "amount", "officer", "note"],
   marketing_spend: ["day", "month", "channel", "campaign", "amount", "source"],
@@ -25,6 +25,9 @@ export const TENANT_TABLES = {
   build_costs: ["build_id", "category", "stage_id", "item", "amount", "cost_date", "entered_by", "batch_id"],
   cost_budgets: ["house_type", "category", "amount"],
   cost_settings: ["key", "value"],
+  promotions: ["name", "kind", "default_value", "valid_until", "active"],
+  lead_promos: ["lead_id", "promo_id", "name", "kind", "value", "created_by"],
+  project_settings: ["key", "value"],
   events: ["title", "event_date", "event_month", "event_time", "note", "lead_id", "created_by"],
 } as const;
 

@@ -1,7 +1,8 @@
 /**
  * ต้นทุนและกำไรรายหลัง (ส่วนก่อสร้าง) — ข้อมูลลับ เห็นเฉพาะเจ้าของโครงการและบัญชี
  *
- * รายรับ = ราคาตามสัญญา (ไม่มีใช้ราคาแปลง) + งานเพิ่ม-ลดที่ลูกค้ายืนยัน
+ * รายรับ = ราคาขายจริงในหน้าลูกค้า (ไม่มีใช้ราคาสัญญา แล้วราคาแปลง) − ส่วนลดเงินสด + งานเพิ่ม-ลดที่ลูกค้ายืนยัน
+ * โปรโมชั่นของแถม/ฟรีค่าโอน นับเป็นต้นทุนหมวดของแถม/ค่าโอนให้เอง
  * ต้นทุน:
  *   - กรอกเอง: วัสดุ ค่าแรง ค่าโอนและภาษี ของแถมและส่วนลด ค่านายหน้า อื่น ๆ (งบจากแม่แบบตามแบบบ้าน)
  *   - ระบบคิดให้: ที่ดิน (ใส่รายแปลง หรือราคารวมหารตามตารางวา), ส่วนกลาง (หารเท่ากันทุกแปลง หรือหารตามตารางวา),
@@ -137,16 +138,18 @@ export async function setPlotLand(db: TenantDb, byCode: Record<string, { area?: 
 }
 
 // ── รายงาน ──
-export type CatLine = { cat: CostCat; budget: number; actual: number; projected: number; auto: boolean; paceWarn: number };
+/** promo = ส่วนของ actual ที่มาจากโปรโมชั่นในหน้าลูกค้า (ของแถม/ฟรีค่าโอน) */
+export type CatLine = { cat: CostCat; budget: number; actual: number; projected: number; auto: boolean; paceWarn: number; promo: number };
 export type ProfitRow = {
-  build: Row; plotCode: string; revenue: number; budgetTotal: number; actualTotal: number; projectedTotal: number;
+  build: Row; plotCode: string; revenue: number; salePrice: number; cashDiscount: number; leadId: string; budgetTotal: number; actualTotal: number; projectedTotal: number;
   profit: number; margin: number; progress: number; done: boolean; lines: CatLine[]; flags: string[];
 };
 
 export async function profitReport(db: TenantDb, opts: { kind?: string; now?: Date } = {}) {
-  const [builds, stages, changes, costs, plots, budgets, settings, leads, spend] = await Promise.all([
+  const [builds, stages, changes, costs, plots, budgets, settings, leads, spend, leadPromos] = await Promise.all([
     listAll(db, "builds"), listAll(db, "build_stages"), listAll(db, "build_changes"), listAll(db, "build_costs"),
     listAll(db, "plots"), listAll(db, "cost_budgets"), listAll(db, "cost_settings"), listAll(db, "leads"), listAll(db, "marketing_spend"),
+    listAll(db, "lead_promos"),
   ]);
   const builder = opts.kind === "builder";
   const plotBy = new Map(plots.map((p) => [String(p.code), p]));
@@ -189,17 +192,21 @@ export async function profitReport(db: TenantDb, opts: { kind?: string; now?: Da
     const progress = st.length ? st.filter((s) => s.done_at).length / st.length : 0;
     const plot = plotBy.get(String(b.plot_code ?? ""));
     const confirmed = changes.filter((c) => c.build_id === b.id && c.status === "confirmed").reduce((a, c) => a + Number(c.amount), 0);
-    const base = Number(b.contract_price) || Number(plot?.price ?? 0);
-    const revenue = r2(base + confirmed);
+    const lead = leadOf(b);
+    // ราคา: ราคาขายจริงในหน้าลูกค้า > ราคาสัญญาในงานก่อสร้าง > ราคาตั้งของแปลง · ส่วนลดเงินสดหักออกจากรายรับ
+    const promos = lead ? leadPromos.filter((x) => x.lead_id === lead.id) : [];
+    const promoSum = (k: string) => r2(promos.filter((x) => x.kind === k).reduce((a, x) => a + Number(x.value), 0));
+    const base = (lead && Number(lead.sale_price) > 0 ? Number(lead.sale_price) : 0) || Number(b.contract_price) || Number(plot?.price ?? 0);
+    const revenue = r2(base - promoSum("cash") + confirmed);
     const budget = tmpl(String(plot?.house_type ?? ""));
     const mine = costs.filter((c) => c.build_id === b.id);
-    const lead = leadOf(b);
     const lines: CatLine[] = catsFor(opts.kind).map((cat) => {
-      if (cat === "land") { const v = landOf(plot); return { cat, budget: v, actual: v, projected: v, auto: true, paceWarn: 0 }; }
-      if (cat === "shared") { const v = sharedOf(plot); return { cat, budget: v, actual: v, projected: v, auto: true, paceWarn: 0 }; }
-      if (cat === "marketing") { const v = lead ? cpb.get(String(lead.channel)) ?? 0 : 0; return { cat, budget: v, actual: v, projected: v, auto: true, paceWarn: 0 }; }
+      if (cat === "land") { const v = landOf(plot); return { cat, budget: v, actual: v, projected: v, auto: true, paceWarn: 0, promo: 0 }; }
+      if (cat === "shared") { const v = sharedOf(plot); return { cat, budget: v, actual: v, projected: v, auto: true, paceWarn: 0, promo: 0 }; }
+      if (cat === "marketing") { const v = lead ? cpb.get(String(lead.channel)) ?? 0 : 0; return { cat, budget: v, actual: v, projected: v, auto: true, paceWarn: 0, promo: 0 }; }
       const bud = budget.get(cat) ?? 0;
-      const act = r2(mine.filter((c) => c.category === cat).reduce((a, c) => a + Number(c.amount), 0));
+      const promo = cat === "giveaway" ? promoSum("gift") : cat === "transfer" ? promoSum("transfer") : 0;
+      const act = r2(mine.filter((c) => c.category === cat).reduce((a, c) => a + Number(c.amount), 0) + promo);
       const projected = done ? act : Math.max(act, bud);
       let paceWarn = 0;
       // เตือนเมื่องานคืบหน้าอย่างน้อย 40% (ช่วงต้นงานซื้อของล่วงหน้าเยอะเป็นปกติ) — เป็นคำเตือน ไม่นำไปหักกำไรคาดการณ์
@@ -207,7 +214,7 @@ export async function profitReport(db: TenantDb, opts: { kind?: string; now?: Da
         const pace = r2(act / progress);
         if (pace > bud) paceWarn = r2(pace - bud);
       }
-      return { cat, budget: bud, actual: act, projected: r2(projected), auto: false, paceWarn };
+      return { cat, budget: bud, actual: act, projected: r2(projected), auto: false, paceWarn, promo };
     });
     const sum = (k: "budget" | "actual" | "projected") => r2(lines.reduce((a, l) => a + l[k], 0));
     const projectedTotal = sum("projected");
@@ -221,7 +228,7 @@ export async function profitReport(db: TenantDb, opts: { kind?: string; now?: Da
     if (!budget.size) flags.push("ยังไม่ได้ตั้งงบ");
     if ((sharedMode === "area" || landMode === "area") && plot && !(Number(plot.area_sqw ?? 0) > 0)) flags.push("ยังไม่ใส่ตร.ว.");
     return {
-      build: b, plotCode: String(b.plot_code ?? ""), revenue, budgetTotal: sum("budget"), actualTotal: sum("actual"), projectedTotal,
+      build: b, plotCode: String(b.plot_code ?? ""), revenue, salePrice: r2(base), cashDiscount: promoSum("cash"), leadId: lead ? String(lead.id) : "", budgetTotal: sum("budget"), actualTotal: sum("actual"), projectedTotal,
       profit, margin: revenue > 0 ? r2((profit / revenue) * 100) : 0, progress, done, lines, flags,
     };
   }).sort((a, b) => a.margin - b.margin);
