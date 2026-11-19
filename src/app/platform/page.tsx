@@ -24,7 +24,7 @@ export default async function PlatformOverview() {
     { label: "ดูอย่างเดียว", value: counts.readonly, href: "/platform/projects?state=readonly", warn: true },
   ];
   return (
-    <BackShell env={env} email={email} staffRole={staffRole} active="overview">
+    <BackShell env={env} email={email} staffRole={staffRole} active="overview" alerts={counts.expiring + counts.grace}>
       <h1 className="mb-1 text-[28px] font-bold leading-tight">ภาพรวมระบบ</h1>
       <p className="mb-5 text-sm text-ops-muted">ข้อมูลรวม {totalRows.toLocaleString("th-TH")} แถว (ฐานข้อมูลหนึ่งก้อนเก็บได้ 10 GB) · ทดลอง {ENT.trialDays} วัน · ขั้นต่ำ Pure Product {ENT.pureMin.toLocaleString("th-TH")} บาทต่อ {ENT.windowMonths} เดือน · ผ่อนผัน {ENT.graceDays} วัน</p>
       <div className={`mb-6 grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 ${opsCard} overflow-hidden`}>

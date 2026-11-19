@@ -18,7 +18,8 @@ export function makeD1({ migrate = true } = {}) {
     all: async () => { calls.n++; return { results: raw.prepare(sql).all(...params).map((r) => ({ ...r })) }; },
     first: async () => { calls.n++; const r = raw.prepare(sql).get(...params); return r ? { ...r } : null; },
     run: async () => { calls.n++; return runSync(sql, params); },
-    _sync: () => runSync(sql, params),
+    // batch ของ D1 คืน results ให้คำสั่ง SELECT ด้วย
+    _sync: () => (/^\s*SELECT/i.test(sql) ? { meta: { last_row_id: 0, changes: 0 }, results: raw.prepare(sql).all(...params).map((r) => ({ ...r })) } : runSync(sql, params)),
   });
   const log = [];
   return {

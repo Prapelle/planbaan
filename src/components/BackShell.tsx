@@ -11,12 +11,14 @@ import { Icon } from "./ProjectShell";
  */
 export type BackActive = "overview" | "projects" | "expiring" | "staff";
 
-export async function BackShell({ env, email, staffRole, active, children }: {
+export async function BackShell({ env, email, staffRole, active, children, alerts: known }: {
   env: WorkerEnv; email: string; staffRole: string; active: BackActive; children: React.ReactNode;
+  /** หน้าที่คำนวณสิทธิ์ของทุกโครงการอยู่แล้วส่งมาเลย ไม่ต้องอ่านฐานข้อมูลซ้ำ */
+  alerts?: number;
 }) {
   // ตัวเลขบนเมนู "ใกล้หมดสิทธิ์" = ใกล้หมด + ผ่อนผัน (โครงการมีไม่มาก คำนวณจากตาราง projects ตรง ๆ)
-  let alerts = 0;
-  try { alerts = (await listProjects(controlDb(env))).map((p) => entitlementOf(p).state).filter((s) => s === "expiring" || s === "grace").length; } catch { /* แสดงเมนูต่อได้ */ }
+  let alerts = known ?? 0;
+  if (known === undefined) try { alerts = (await listProjects(controlDb(env))).map((p) => entitlementOf(p).state).filter((s) => s === "expiring" || s === "grace").length; } catch { /* แสดงเมนูต่อได้ */ }
   const nav: { key: BackActive; href: string; label: string; icon: string; badge?: number }[] = [
     { key: "overview", href: "/platform", label: "ภาพรวมระบบ", icon: "team" },
     { key: "projects", href: "/platform/projects", label: "โครงการ", icon: "home" },

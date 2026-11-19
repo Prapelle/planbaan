@@ -46,7 +46,7 @@ export default async function PlatformProjects({ searchParams }: { searchParams:
   const href = (key: string) => `${PATH}?${new URLSearchParams({ ...(key ? { state: key } : {}), ...(q ? { q } : {}) })}`;
 
   return (
-    <BackShell env={env} email={email} staffRole={staffRole} active={state === "attention" ? "expiring" : "projects"}>
+    <BackShell env={env} email={email} staffRole={staffRole} active={state === "attention" ? "expiring" : "projects"} alerts={(counts.expiring ?? 0) + (counts.grace ?? 0)}>
       <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-[28px] font-bold leading-tight">โครงการ</h1>

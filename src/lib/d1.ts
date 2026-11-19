@@ -9,7 +9,7 @@ export type D1Stmt = {
   first<T = Record<string, unknown>>(): Promise<T | null>;
   run(): Promise<{ meta: D1Meta }>;
 };
-export type D1Like = { prepare(sql: string): D1Stmt; batch(s: D1Stmt[]): Promise<{ meta: D1Meta }[]> };
+export type D1Like = { prepare(sql: string): D1Stmt; batch(s: D1Stmt[]): Promise<{ meta: D1Meta; results?: unknown[] }[]> };
 
 export type R2ObjectLike = { key: string; uploaded?: Date; size?: number };
 export type R2Like = {

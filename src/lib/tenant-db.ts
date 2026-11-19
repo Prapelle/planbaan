@@ -36,11 +36,10 @@ export const TENANT_TABLES = {
  * อ่านข้ามโครงการโดยตั้งใจ จึงอยู่ในไฟล์นี้ที่เดียว
  */
 export async function rowCountsByProject(db: D1Like): Promise<Record<string, number>> {
+  // ทุกตารางในรอบเดียวด้วย D1 batch (เดิมทีละตาราง ~30 รอบ ทำให้หลังบ้านช้า · UNION ALL ยาวเกินที่ D1 รับ)
+  const res = await db.batch(Object.keys(TENANT_TABLES).map((t) => db.prepare(`SELECT project_id, COUNT(*) AS n FROM "${t}" GROUP BY project_id`)));
   const out: Record<string, number> = {};
-  for (const t of Object.keys(TENANT_TABLES)) {
-    const r = await db.prepare(`SELECT project_id, COUNT(*) AS n FROM "${t}" GROUP BY project_id`).all<{ project_id: string; n: number }>();
-    for (const x of r.results) out[x.project_id] = (out[x.project_id] ?? 0) + Number(x.n);
-  }
+  for (const r of res) for (const x of (r.results ?? []) as { project_id: string; n: number }[]) out[x.project_id] = (out[x.project_id] ?? 0) + Number(x.n);
   return out;
 }
 

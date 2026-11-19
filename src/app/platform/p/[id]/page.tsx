@@ -73,12 +73,13 @@ export default async function ProjectAdminPage({ params, searchParams }: { param
   const db = controlDb(env);
   const project = await getProject(db, id);
   if (!project) notFound();
-  const [owners, members, purchases, usage, grants] = await Promise.all([
+  // อ่านพร้อมกันทั้งหมด · งานก่อสร้างอ่านเฉพาะวันที่และสถานะ (ไม่อ่านเนื้อหาอื่นของงาน) เพื่อคิดเงินส่วนก่อสร้าง
+  const [owners, members, purchases, usage, grants, buildRows] = await Promise.all([
     ownersOf(db, id), listMembers(db, id), listPurchases(db, id), projectUsage(db, id, 30), listSupportGrants(db, id),
+    tenantDb(shardDb(env, project.shard), id).list("builds", { limit: 2000, columns: ["start_date", "done_at", "status"] }),
   ]);
   const ent = entitlementOf(project);
-  // นับเฉพาะจำนวนหลังและวันที่ (ไม่อ่านเนื้อหาอื่นของงาน) เพื่อคิดเงินส่วนก่อสร้าง
-  const builds = (await tenantDb(shardDb(env, project.shard), id).list("builds", { limit: 2000, columns: ["start_date", "done_at", "status"] })).map((b) => ({ id: b.id, start_date: b.start_date, done_at: b.done_at, status: b.status }));
+  const builds = buildRows.map((b) => ({ id: b.id, start_date: b.start_date, done_at: b.done_at, status: b.status }));
   const months = lastMonths(6);
   const billing = months.map((m) => ({ month: m, houses: billableInMonth(builds, m) }));
   const roleCount = members.reduce<Record<string, number>>((a, m) => { a[m.role] = (a[m.role] ?? 0) + 1; return a; }, {});
