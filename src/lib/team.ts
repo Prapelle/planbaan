@@ -5,7 +5,7 @@
  * - งานค้าง (ลูกค้าที่ดูแล ค้างติดต่อ นัดเลยกำหนด) เป็นสถานะปัจจุบัน ไม่ขึ้นกับเดือน
  */
 import type { TenantDb } from "./tenant-db";
-import { bkkDate, isClosed, isStale } from "./sales";
+import { bkkDate, isClosed, isStale, stageIdx } from "./sales";
 
 export type PersonStat = {
   email: string; role: string;
@@ -63,14 +63,16 @@ export async function teamReport(db: TenantDb, month: string, members: { email: 
     if (a.kind === "contact") { person(String(a.actor)).contacts++; continue; }
     if (a.kind !== "stage" && a.kind !== "created") continue;
     const to = String(a.to_stage);
-    const key = `${a.lead_id}|${to}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
     const p = person(ownerOf.get(String(a.lead_id)) ?? "");
-    if (to === "visited") p.visits++;
-    else if (to === "booked") p.bookings++;
-    else if (to === "transferred") p.transfers++;
-    else if (to === "lost") p.lost++;
+    const once = (m: string) => { const k = `${a.lead_id}|${m}`; if (seen.has(k)) return false; seen.add(k); return true; };
+    if (to === "lost") { if (once("lost")) p.lost++; continue; }
+    // ข้ามขั้นได้ (เช่น เข้าชมแล้ว → ยื่นกู้ หรือรับสร้างบ้านเริ่มก่อสร้างเลย) นับทุกขั้นสำคัญที่เพิ่งผ่าน
+    const from = a.kind === "created" ? -1 : stageIdx(String(a.from_stage));
+    const t = stageIdx(to);
+    const passed = (m: string) => from < stageIdx(m) && t >= stageIdx(m);
+    if (passed("visited") && once("visited")) p.visits++;
+    if (passed("booked") && once("booked")) p.bookings++;
+    if (passed("transferred") && once("transferred")) p.transfers++;
   }
   const rows = [...people.values()].sort((a, b) => b.bookings - a.bookings || b.visits - a.visits || b.contacts - a.contacts || a.email.localeCompare(b.email));
   const total = rows.reduce((t, r) => {

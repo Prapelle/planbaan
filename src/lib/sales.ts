@@ -101,7 +101,9 @@ export async function updatePlot(db: TenantDb, code: string, patch: { houseType?
 export async function deletePlot(db: TenantDb, code: string) {
   const plot = await getPlotByCode(db, code);
   if (!plot) throw new Error("ไม่พบแปลงนี้");
-  if ((await db.count("leads", { plot_code: String(plot.code) })) > 0) throw new Error("แปลงนี้มีลูกค้าผูกอยู่ ลบไม่ได้");
+  const [leads, builds] = await Promise.all([db.count("leads", { plot_code: String(plot.code) }), db.count("builds", { plot_code: String(plot.code) })]);
+  if (leads > 0) throw new Error("แปลงนี้มีลูกค้าผูกอยู่ ลบไม่ได้");
+  if (builds > 0) throw new Error("แปลงนี้มีงานก่อสร้างผูกอยู่ ลบไม่ได้");
   await db.remove("plots", String(plot.id));
 }
 
@@ -187,7 +189,7 @@ export async function createLead(db: TenantDb, input: LeadInput, actor: string) 
   return row;
 }
 
-export async function updateLead(db: TenantDb, id: string, input: LeadInput, actor: string) {
+export async function updateLead(db: TenantDb, id: string, input: LeadInput, actor: string, opts: { requirePlot?: boolean } = {}) {
   const lead = await db.get("leads", id);
   if (!lead) throw new Error("ไม่พบลูกค้ารายนี้");
   const patch: Record<string, unknown> = {};
@@ -204,6 +206,7 @@ export async function updateLead(db: TenantDb, id: string, input: LeadInput, act
     const plot = input.plotCode ? cleanCode(input.plotCode) : "";
     if (plot && !CODE_OK.test(plot)) throw new Error("รหัสแปลงไม่ถูกต้อง");
     if (plot !== oldPlot) {
+      if (!plot && opts.requirePlot !== false && stageIdx(stage) >= BOOKED_IDX) throw new Error("ลูกค้าจองแล้วต้องมีแปลง ถ้าจะเปลี่ยนแปลงให้เลือกแปลงใหม่ ถ้ายกเลิกให้เปลี่ยนเป็น ไม่ซื้อ");
       const [oldSt, newSt] = await Promise.all([plotState(db, oldPlot, id), plotState(db, plot, id)]);
       checkPlotState(plot, newSt, stage);
       patch.plot_code = plot;

@@ -26,7 +26,7 @@ async function saveAction(f: FormData) {
     await S.updateLead(ctx.db, id, {
       name: fv(f, "name"), phone: fv(f, "phone"), channel: fv(f, "channel"), plotCode: fv(f, "plot_code"),
       ownerEmail: fv(f, "owner_email"), nextFollowAt: fv(f, "next_follow_at"), note: fv(f, "note"),
-    }, ctx.email);
+    }, ctx.email, { requirePlot: ctx.project.kind !== "builder" });
     if (f.has("sale_price")) await P.setSalePrice(ctx.db, id, fv(f, "sale_price"));
     // ใส่บันทึกการติดต่อมาด้วย = นับเป็นการติดต่อ (รีเซ็ตวันค้างติดตาม)
     if (fv(f, "contact")) await S.logContact(ctx.db, id, fv(f, "contact"), ctx.email);

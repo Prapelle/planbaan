@@ -65,7 +65,8 @@ export type BatchOp =
   | { kind: "update"; table: TenantTable; id: string; patch: Record<string, unknown> };
 
 /** since/before: กรองช่วง created_at (ISO) */
-export type ListOpts = { where?: Record<string, string | number>; orderBy?: string; desc?: boolean; limit?: number; offset?: number; since?: string; before?: string };
+/** columns: อ่านเฉพาะคอลัมน์ที่ระบุ (เช่น back office อ่านแค่วันที่ ไม่แตะชื่อลูกค้า) */
+export type ListOpts = { where?: Record<string, string | number>; orderBy?: string; desc?: boolean; limit?: number; offset?: number; since?: string; before?: string; columns?: string[] };
 
 export function tenantDb(db: D1Like, projectId: string) {
   if (!projectId) throw new Error("ต้องระบุ projectId");
@@ -108,7 +109,9 @@ export function tenantDb(db: D1Like, projectId: string) {
       if (!ORDERABLE.has(order) && !(TENANT_TABLES[t] as readonly string[]).includes(order)) throw new Error(`เรียงตาม ${order} ไม่ได้`);
       const limit = Math.min(Math.max(1, Math.floor(opts.limit ?? 500)), 2000);
       const offset = Math.max(0, Math.floor(opts.offset ?? 0));
-      const sql = `SELECT ${colList(t)} FROM "${t}" WHERE ${conds.join(" AND ")} ORDER BY "${order}" ${opts.desc ? "DESC" : "ASC"} LIMIT ${limit} OFFSET ${offset}`;
+      if (opts.columns) checkCols(t, opts.columns);
+      const cols = opts.columns ? [...SYSTEM_COLS, ...opts.columns].map((c) => `"${c}"`).join(", ") : colList(t);
+      const sql = `SELECT ${cols} FROM "${t}" WHERE ${conds.join(" AND ")} ORDER BY "${order}" ${opts.desc ? "DESC" : "ASC"} LIMIT ${limit} OFFSET ${offset}`;
       const r = await db.prepare(sql).bind(...args).all<Row>();
       return r.results;
     },

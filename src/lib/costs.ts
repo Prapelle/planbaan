@@ -178,7 +178,9 @@ export async function profitReport(db: TenantDb, opts: { kind?: string; now?: Da
   const leadOf = (b: Row) => {
     if (b.lead_id) return leads.find((l) => l.id === b.lead_id);
     if (!b.plot_code) return undefined;
-    return leads.filter((l) => l.plot_code === b.plot_code && l.stage !== "lost").sort((x, y) => String(y.updated_at).localeCompare(String(x.updated_at)))[0];
+    // ผู้ซื้อของแปลง = ลูกค้าที่จองขึ้นไป (ไม่ใช่ลูกค้าที่แค่สนใจแปลงนี้)
+    return leads.filter((l) => l.plot_code === b.plot_code && PIPELINE.indexOf(String(l.stage) as never) >= BOOK)
+      .sort((x, y) => String(y.updated_at).localeCompare(String(x.updated_at)))[0];
   };
   const tmpl = (houseType: string) => {
     const own = budgets.filter((x) => x.house_type === houseType);

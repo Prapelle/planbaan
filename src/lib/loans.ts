@@ -118,9 +118,16 @@ export async function setAppStatus(db: TenantDb, appId: string, statusRaw: strin
 export async function removeApp(db: TenantDb, appId: string, actor: string) {
   const app = await db.get("loan_apps", appId);
   if (!app) throw new Error("ไม่พบรายการยื่นนี้");
-  await needLead(db, String(app.lead_id));
+  const leadId = String(app.lead_id);
+  const lead = await needLead(db, leadId);
+  // ลบแล้วที่เหลือไม่ผ่านทุกธนาคาร → เริ่มนับแก้หนี้ / ไม่เหลือหรือยังมีธนาคารที่รออยู่ → เลิกนับ
+  const rest = (await appsOf(db, leadId)).filter((a) => a.id !== appId);
+  const allRejected = rest.length > 0 && rest.every((a) => a.status === "rejected");
+  const ops: BatchOp[] = [act(leadId, actor, `ลบธนาคาร ${app.bank}`)];
+  if (allRejected && !lead.debt_since) ops.push({ kind: "update", table: "leads", id: leadId, patch: { debt_since: new Date().toISOString() } });
+  if (!allRejected && lead.debt_since) ops.push({ kind: "update", table: "leads", id: leadId, patch: { debt_since: "" } });
   await db.remove("loan_apps", appId);
-  await db.insert("lead_activity", { lead_id: String(app.lead_id), kind: "loan", note: `ลบธนาคาร ${app.bank}`, actor });
+  await db.batch(ops);
 }
 
 export async function saveDebt(db: TenantDb, leadId: string, p: { reason: string; plan: string; retryAt: string }) {

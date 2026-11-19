@@ -89,7 +89,7 @@ export default async function LoansPage({ searchParams }: { searchParams: Promis
                   className={`flex flex-col gap-0.5 rounded-lg border bg-white p-3 text-sm ${lead.id === sel.lead.id ? "border-brand-600 ring-2 ring-brand-500" : "border-slate-200"}`}>
                   <span className="flex justify-between gap-2"><b>{String(lead.name)}</b><span className="text-slate-600">{String(lead.plot_code)}</span></span>
                   <span className="text-xs text-slate-600">เอกสาร {sum.docsDone}/{sum.docsTotal} · ยื่น {sum.filed} · อนุมัติ {sum.approved} · รอผล {sum.waiting}</span>
-                  {sum.allRejected && <span className="text-xs font-semibold text-red-700">ไม่ผ่านทุกธนาคาร · แก้หนี้ {sum.heldDays} วัน</span>}
+                  {sum.allRejected && <span className="text-xs font-semibold text-red-700">ไม่ผ่านทุกธนาคาร · ถือแปลง {sum.heldDays}/{L.HOLD_DAYS} วัน{sum.holdWarning ? " ใกล้ครบกำหนด" : ""}</span>}
                   {sum.approved > 0 && <span className="text-xs font-semibold text-emerald-800">อนุมัติแล้ว พร้อมนัดโอน</span>}
                   {sum.staleApps > 0 && <span className="text-xs font-semibold text-red-700">ธนาคารไม่ขยับเกิน {L.STALE_BANK_DAYS} วัน {sum.staleApps} ราย</span>}
                 </Link>

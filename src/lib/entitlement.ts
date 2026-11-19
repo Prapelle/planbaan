@@ -16,7 +16,7 @@ export const ENT = {
   trialDays: Number(process.env.TRIAL_DAYS ?? 60),
   pureMin: Number(process.env.PURE_MIN_BAHT ?? 30000),   // ยังรอเจ้าของตัดสินใจ: ค่าชั่วคราว
   windowMonths: 3,
-  warnDays: 14,
+  warnDays: 30, // แผน: แจ้งล่วงหน้า 30 วันก่อนหมดสิทธิ์
   graceDays: 14,
 };
 
