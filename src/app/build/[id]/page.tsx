@@ -227,7 +227,7 @@ export default async function BuildDetail({ params, searchParams }: { params: Pr
           </div>
           <div className="rounded-lg border-2 border-slate-900 bg-white p-4">
             <h2 className="mb-2 text-sm font-semibold">รูปหน้างาน</h2>
-            <PhotoUpload action={photoAction} buildId={id} stages={stages.map((x) => ({ id: String(x.id), name: String(x.name) }))} defaultStage={s.current ? String(s.current.id) : undefined} />
+            <PhotoUpload action={photoAction} projectId={ctx.project.id} buildId={id} stages={stages.map((x) => ({ id: String(x.id), name: String(x.name) }))} defaultStage={s.current ? String(s.current.id) : undefined} />
           </div>
         </section>
       )}

@@ -67,11 +67,12 @@ async function ProjectHome() {
   const builder = ctx.project.kind === "builder";
   const month = S.bkkDate().slice(0, 7);
   const boss = ctx.role === "owner" || ctx.role === "manager";
-  const onboarding = boss ? await O.checklist(ctx.db, { kind: ctx.project.kind, construction: !!ctx.project.construction_enabled, members: (await listMembers(controlDb(ctx.env), ctx.project.id)).length }) : null;
-  const [o, board, spendRows] = await Promise.all([
+  const [o, board, spendRows, onboarding] = await Promise.all([
     S.overview(ctx.db, new Date(), ctx.project.kind),
     ctx.project.construction_enabled ? C.buildBoard(ctx.db, Number(ctx.project.build_stale_days ?? 7)) : Promise.resolve(null),
     ctx.db.list("marketing_spend", { where: { month }, limit: 2000, columns: ["amount"] }),
+    // เช็กลิสต์เริ่มต้นใช้ (เจ้าของ/ผู้จัดการ) อ่านพร้อมส่วนอื่น ไม่ทำให้หน้าช้าลง
+    boss ? listMembers(controlDb(ctx.env), ctx.project.id).then((m) => O.checklist(ctx.db, { kind: ctx.project.kind, construction: !!ctx.project.construction_enabled, members: m.length })) : Promise.resolve(null),
   ]);
   // ต้นทุนต่อลูกค้าเดือนนี้ = ค่าโฆษณาเดือนนี้ ÷ ลูกค้าที่เข้ามาเดือนนี้ (ตามแผน: หน้าภาพรวมต้องเห็นต้นทุนต่อ lead)
   const spend = spendRows.reduce((a, r) => a + Number(r.amount), 0);

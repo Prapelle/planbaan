@@ -160,7 +160,7 @@ export default async function LoansPage({ searchParams }: { searchParams: Promis
                             {L.LOAN_STATUS.map((s) => <option key={s} value={s}>{L.LOAN_LABEL[s]}</option>)}
                           </select>
                         </label>
-                        <label className="flex flex-col gap-1">วงเงินอนุมัติ (บาท)<input name="amount" type="number" min={0} step={1000} defaultValue={Number(a.amount) || ""} className="min-h-10 w-36 rounded-md border border-slate-300 px-2" /></label>
+                        <label className="flex flex-col gap-1">วงเงินอนุมัติ (บาท)<input name="amount" type="number" min={0} step={1} defaultValue={Number(a.amount) || ""} className="min-h-10 w-36 rounded-md border border-slate-300 px-2" /></label>
                         <label className="flex flex-col gap-1">เจ้าหน้าที่ธนาคาร<input name="officer" defaultValue={String(a.officer)} className="min-h-10 rounded-md border border-slate-300 px-2" /></label>
                         <button className="min-h-10 rounded-md bg-slate-900 px-3 font-semibold text-white">บันทึก</button>
                       </form>

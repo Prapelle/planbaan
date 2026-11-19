@@ -189,12 +189,12 @@ export default async function LeadPage({ params, searchParams }: { params: Promi
                     {S.CHANNELS.map((c) => <option key={c} value={c}>{S.CHANNEL_LABEL[c]}</option>)}
                   </select>
                 </label>
-                <label className="flex flex-col gap-1">แปลง
+{ctx.project.kind !== "builder" && (                <label className="flex flex-col gap-1">แปลง
                   <select name="plot_code" defaultValue={String(lead.plot_code)} className="min-h-11 rounded-md border border-slate-300 px-3">
                     <option value="">ยังไม่เลือก</option>
                     {plots.map((p) => <option key={p.id} value={String(p.code)}>{String(p.code)} · {S.SALE_LABEL[p.sale_status as S.SaleStatus]}</option>)}
                   </select>
-                </label>
+                </label>)}
                 <label className="flex flex-col gap-1">ผู้ดูแล
                   <select name="owner_email" defaultValue={String(lead.owner_email)} className="min-h-11 rounded-md border border-slate-300 px-3">
                     {!members.some((m) => m.email === lead.owner_email) && <option value={String(lead.owner_email)}>{String(lead.owner_email) || "ไม่ระบุ"}</option>}

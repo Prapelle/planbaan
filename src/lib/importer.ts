@@ -66,6 +66,9 @@ export const channelOf = (v: string): S.Channel => {
   return CH.find(([re]) => re.test(s))?.[1] ?? "other";
 };
 const ST: [RegExp, S.Stage][] = [
+  // คำของรับสร้างบ้านก่อน (ส่งมอบ ก่อสร้าง เซ็นสัญญา เสนอแบบ ดูที่ดิน ไม่สร้าง)
+  [/ส่งมอบ|handover/i, "transferred"], [/ไม่สร้าง/i, "lost"], [/ก่อสร้าง|กำลังสร้าง/i, "loan"], [/เซ็นสัญญา|ทำสัญญา|contract/i, "booked"],
+  [/เสนอแบบ|เสนอราคา|quotation/i, "visited"], [/ดูที่ดิน/i, "visit_scheduled"],
   [/โอน|transfer/i, "transferred"], [/ยื่นกู้|สินเชื่อ|loan/i, "loan"], [/จอง|book|มัดจำ/i, "booked"],
   [/ไม่ซื้อ|ยกเลิก|lost|cancel/i, "lost"], [/เข้าชมแล้ว|ชมแล้ว|visited/i, "visited"], [/นัด|visit/i, "visit_scheduled"],
   [/ติดต่อได้|ติดต่อแล้ว|contacted/i, "contacted"],
@@ -76,7 +79,8 @@ export const stageOf = (v: string): S.Stage => {
   return ST.find(([re]) => re.test(s))?.[1] ?? "new";
 };
 
-export async function importLeads(db: TenantDb, rows: Raw[], actor: string, members: string[]): Promise<ImportReport> {
+export async function importLeads(db: TenantDb, rows: Raw[], actor: string, members: string[], kind = "developer"): Promise<ImportReport> {
+  const builder = kind === "builder"; // รับสร้างบ้านไม่มีแปลงในผัง เซ็นสัญญาได้โดยไม่ต้องมีแปลง
   if (rows.length > MAX_ROWS) throw new Error(`นำเข้าได้ครั้งละไม่เกิน ${MAX_ROWS} แถว`);
   const [leads, plots] = await Promise.all([db.list("leads", { limit: 2000, columns: ["phone", "plot_code", "stage"] }), db.list("plots", { limit: 2000 })]);
   const phones = new Set(leads.map((l) => S.phoneKey(l.phone)).filter(Boolean));
@@ -98,7 +102,7 @@ export async function importLeads(db: TenantDb, rows: Raw[], actor: string, memb
     let stage = stageOf(r.stage ?? "");
     let plot = t(r.plot_code, 12).toUpperCase().replace(/\s+/g, "");
     if (plot && !plotBy.has(plot)) { rep.notes.push({ row, reason: `ไม่พบแปลง ${plot} นำเข้าโดยไม่ผูกแปลง` }); plot = ""; }
-    if (S.stageIdx(stage) >= S.stageIdx("booked")) {
+    if (!builder && S.stageIdx(stage) >= S.stageIdx("booked")) {
       const p = plot ? plotBy.get(plot) : null;
       const why = !plot ? "ไม่มีแปลง" : held.has(plot) ? `แปลง ${plot} มีผู้จองแล้ว` : p?.sale_status === "rent" ? `แปลง ${plot} ตั้งเป็นให้เช่า` : "";
       if (why) { rep.notes.push({ row, reason: `${why} นำเข้าที่ขั้น "เข้าชมแล้ว" แทน "${S.STAGE_LABEL[stage]}"` }); stage = "visited"; }

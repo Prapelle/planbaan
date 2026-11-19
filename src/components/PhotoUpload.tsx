@@ -22,7 +22,8 @@ async function shrink(file: File): Promise<Blob> {
 }
 
 // ── คิวรูปที่ส่งไม่ผ่าน (เน็ตหลุดหน้างาน): เก็บใน IndexedDB ของเครื่อง ส่งใหม่เองเมื่อมีสัญญาณ ──
-type Queued = { id?: number; build: string; stage: string; caption: string; blob: Blob; at: number };
+/** project: กันส่งรูปค้างของโครงการหนึ่งไปเข้าอีกโครงการ (เว็บที่ใช้โดเมนเดียวกันหลายโครงการ) */
+type Queued = { id?: number; project: string; build: string; stage: string; caption: string; blob: Blob; at: number };
 const DB = "planbaan-photos", STORE = "queue";
 function idb(): Promise<IDBDatabase> {
   return new Promise((ok, fail) => {
@@ -42,9 +43,10 @@ const dequeue = (id: number) => tx("readwrite", (s) => s.delete(id));
 class Offline extends Error {}
 let flushing = false; // ทั้งหน้ามีคิวเดียว
 
-export function PhotoUpload({ action, buildId, stages, defaultStage }: {
-  action: (f: FormData) => Promise<{ error?: string }>; buildId: string; stages: { id: string; name: string }[]; defaultStage?: string;
+export function PhotoUpload({ action, projectId, buildId, stages, defaultStage }: {
+  action: (f: FormData) => Promise<{ error?: string }>; projectId: string; buildId: string; stages: { id: string; name: string }[]; defaultStage?: string;
 }) {
+  const mineQ = useCallback(async () => (await queued()).filter((q) => q.project === projectId), [projectId]);
   const router = useRouter();
   const [pending, start] = useTransition();
   const [status, setStatus] = useState("");
@@ -66,17 +68,17 @@ export function PhotoUpload({ action, buildId, stages, defaultStage }: {
     flushing = true;
     let sent = 0;
     try {
-      for (const q of await queued()) {
+      for (const q of await mineQ()) {
         try {
           const r = await send(q);
           await dequeue(q.id!); // เซิร์ฟเวอร์ตอบแล้ว (สำเร็จหรือรูปใช้ไม่ได้) ไม่ต้องเก็บต่อ
           if (!r.error) sent++;
         } catch { break; }
       }
-      setWaiting((await queued()).length);
+      setWaiting((await mineQ()).length);
     } finally { flushing = false; }
     if (sent) { setStatus(`ส่งรูปที่ค้างไว้แล้ว ${sent} รูป`); router.refresh(); }
-  }, [send, router]);
+  }, [send, router, mineQ]);
 
   // ส่งค้างตอนเปิดหน้าครั้งแรก และทุกครั้งที่เน็ตกลับมา (ผูกครั้งเดียว ใช้ flush ล่าสุดผ่าน ref)
   const latest = useRef(flush);
@@ -96,7 +98,7 @@ export function PhotoUpload({ action, buildId, stages, defaultStage }: {
       let sent = 0, kept = 0;
       for (let i = 0; i < list.length; i++) {
         setStatus(`กำลังส่งรูป ${i + 1}/${list.length}`);
-        const q: Queued = { build: buildId, stage: stage.current?.value ?? "", caption: cap.current?.value ?? "", blob: await shrink(list[i]), at: Date.now() };
+        const q: Queued = { project: projectId, build: buildId, stage: stage.current?.value ?? "", caption: cap.current?.value ?? "", blob: await shrink(list[i]), at: Date.now() };
         try {
           const r = await send(q);
           if (r.error) { setStatus(`รูปที่ ${i + 1}: ${r.error}`); router.refresh(); return; }
@@ -106,7 +108,7 @@ export function PhotoUpload({ action, buildId, stages, defaultStage }: {
           try { await enqueue(q); kept++; } catch { setStatus("ส่งรูปไม่สำเร็จ และเก็บรูปในเครื่องไม่ได้ ลองใหม่เมื่อมีสัญญาณ"); return; }
         }
       }
-      setWaiting((await queued()).length);
+      setWaiting((await mineQ()).length);
       setStatus(kept ? `ส่งแล้ว ${sent} รูป · เก็บไว้ในเครื่อง ${kept} รูป จะส่งเองเมื่อมีสัญญาณ` : `ส่งรูปแล้ว ${sent} รูป`);
       // รีเฟรชเฉพาะเมื่อส่งได้จริง: ตอนออฟไลน์ Next จะโหลดหน้าใหม่ทั้งหน้า แล้วเจอหน้าออฟไลน์ของเบราว์เซอร์
       if (sent) router.refresh();

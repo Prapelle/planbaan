@@ -3,7 +3,7 @@
  * แต่ละบทบาทเห็นเฉพาะเรื่องของตัวเอง:
  * - ทุกคนที่ดูแลลูกค้า: นัดวันนี้/เลยนัด, ลูกค้าค้างติดตาม (เฉพาะลูกค้าที่ตัวเองดูแล)
  * - เจ้าของ/ผู้จัดการ: ส่วนลดรออนุมัติ, ธนาคารไม่ขยับ, แก้หนี้ใกล้ครบกำหนด, บ้านช้า/ไม่อัปเดต, เจ้าของบ้านตอบงานเพิ่ม-ลด
- * - โฟร์แมน: บ้านที่ตัวเองรับผิดชอบที่ช้า/ไม่อัปเดต และงวดที่ครบกำหนดใน 3 วัน (ไม่มีข้อมูลลูกค้า)
+ * - โฟร์แมน: บ้านที่ตัวเองรับผิดชอบ (หรือยังไม่กำหนดผู้รับผิดชอบ) ที่ช้า/ไม่อัปเดต และงวดที่ครบกำหนดใน 3 วัน (ไม่มีข้อมูลลูกค้า)
  * - เจ้าของ: สิทธิ์ใช้งานใกล้หมด
  */
 import type { TenantDb } from "./tenant-db";
@@ -76,7 +76,7 @@ export async function notifications(db: TenantDb, me: {
     for (const s of board.all) {
       const b = s.build;
       if (b.status !== "active") continue;
-      if (foreman && b.owner_email !== me.email) continue;
+      if (foreman && b.owner_email && b.owner_email !== me.email) continue; // ยังไม่กำหนดผู้รับผิดชอบ: โฟร์แมนทุกคนเห็น
       const href = `/build/${b.id}`;
       if (s.lateDays > 0 || s.overdueDays > 0) out.push({ key: `late-${b.id}`, group: "ก่อสร้าง", tone: "red", title: `${s.overdueDays > 0 ? `เลยกำหนดส่งมอบ ${s.overdueDays} วัน` : `ช้ากว่าแผน ${s.lateDays} วัน`}: ${b.title}`, sub: s.current ? `งวด ${s.current.seq}: ${s.current.name}` : "", href });
       else if (s.stale) out.push({ key: `idle-${b.id}`, group: "ก่อสร้าง", tone: "amber", title: `ไม่มีอัปเดต ${s.idleDays} วัน: ${b.title}`, sub: "ติ๊กงวด ถ่ายรูป หรือบันทึกหน้างาน", href });

@@ -108,12 +108,12 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
                 {S.CHANNELS.map((c) => <option key={c} value={c}>{S.CHANNEL_LABEL[c]}</option>)}
               </select>
             </label>
-            <label className="flex flex-col gap-1">แปลงที่สนใจ
+            {ctx.project.kind !== "builder" && <label className="flex flex-col gap-1">แปลงที่สนใจ
               <select name="plot_code" defaultValue={sp.f_plot ?? ""} className="min-h-11 rounded-md border border-slate-300 px-3">
                 <option value="">ยังไม่เลือก</option>
                 {plots.map((p) => <option key={p.id} value={String(p.code)}>{String(p.code)} · {S.SALE_LABEL[p.sale_status as S.SaleStatus]}</option>)}
               </select>
-            </label>
+            </label>}
             <label className="flex flex-col gap-1">นัดติดตามครั้งถัดไป<input name="next_follow_at" type="date" defaultValue={sp.f_follow ?? ""} className="min-h-11 rounded-md border border-slate-300 px-3" /></label>
             <label className="flex flex-col gap-1">หมายเหตุ<input name="note" maxLength={1000} defaultValue={sp.f_note ?? ""} className="min-h-11 rounded-md border border-slate-300 px-3" /></label>
             {dup && (
@@ -153,7 +153,7 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
                   return (
                     <article key={l.id} className="flex flex-col gap-1 rounded-md border border-slate-200 bg-white p-2 text-sm">
                       <Link href={`/leads/${l.id}`} className="font-semibold text-slate-900 underline-offset-2 hover:underline">{String(l.name)}</Link>
-                      <span className="text-xs text-slate-600">{S.CHANNEL_LABEL[l.channel as S.Channel] ?? String(l.channel)} · {String(l.plot_code) || "ยังไม่เลือกแปลง"}</span>
+                      <span className="text-xs text-slate-600">{S.CHANNEL_LABEL[l.channel as S.Channel] ?? String(l.channel)}{ctx.project.kind === "builder" ? "" : ` · ${String(l.plot_code) || "ยังไม่เลือกแปลง"}`}</span>
                       <span className="text-xs text-slate-600">ดูแลโดย {nameOf(l.owner_email)}</span>
                       {stage === "lost" && !!l.lost_reason && <span className="text-xs text-slate-700">{S.lostLabels(ctx.project.kind)[l.lost_reason as S.LostReason] ?? ""}</span>}
                       {stale && <span className="text-xs font-semibold text-red-700">ค้าง {S.daysSince(String(l.last_contact_at), now)} วัน</span>}

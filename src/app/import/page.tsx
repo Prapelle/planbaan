@@ -37,7 +37,7 @@ async function importLeadsAction(json: string) {
   if (!allowed(ctx, "leads")) return { added: 0, updated: 0, skipped: [], notes: [], error: "ไม่มีสิทธิ์นำเข้าลูกค้า" };
   try {
     const members = (await listMembers(controlDb(ctx.env), ctx.project.id)).map((m) => m.email);
-    const r = await importLeads(ctx.db, JSON.parse(json), ctx.email, members);
+    const r = await importLeads(ctx.db, JSON.parse(json), ctx.email, members, ctx.project.kind);
     await ctx.usage("import", { table: "leads", n: r.added });
     revalidatePath("/leads");
     return r;

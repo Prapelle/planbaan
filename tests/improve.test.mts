@@ -73,3 +73,14 @@ await test("แจ้งเตือนตามบทบาท: ฝ่ายข
   assert.deepEqual(fm.map((n) => n.group), ["ก่อสร้าง"]);
   assert.equal((await notifications(db, { ...base, role: "foreman", email: "other@x.com" })).length, 0);
 });
+
+await test("รอบสาม: นำเข้าของรับสร้างบ้าน ใช้คำของรับสร้าง และเซ็นสัญญาไม่ต้องมีแปลง / โฟร์แมนเห็นบ้านที่ยังไม่กำหนดผู้รับผิดชอบ", async () => {
+  const q = await createProject(raw as never, { slug: "rommai", name: "ร่มไม้", ownerEmail: "b@x.com", kind: "builder" });
+  const bdb = tenantDb(raw as never, q.id);
+  assert.deepEqual(["เซ็นสัญญาแล้ว", "กำลังก่อสร้าง", "ส่งมอบแล้ว", "เสนอแบบ", "ดูที่ดิน", "ไม่สร้าง"].map(stageOf), ["booked", "loan", "transferred", "visited", "visit_scheduled", "lost"]);
+  const r = await importLeads(bdb, [{ name: "ลูกค้าสร้างบ้าน", stage: "เซ็นสัญญา" }], "b@x.com", [], "builder");
+  assert.deepEqual([r.added, r.notes.length, (await bdb.list("leads"))[0].stage], [1, 0, "booked"]);
+  const nb = await C.createBuild(db, { title: "ยังไม่มีผู้รับผิดชอบ", startDate: "2026-01-01", dueDate: "2026-02-01" }, "o");
+  const fm = await notifications(db, { kind: "developer", construction: true, staleDays: 7, role: "foreman", email: "other@x.com" });
+  assert.ok(fm.some((n) => n.key === `late-${nb.id}`));
+});
