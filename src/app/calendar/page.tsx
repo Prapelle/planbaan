@@ -21,7 +21,8 @@ async function addAction(f: FormData) {
   const month = /^\d{4}-\d{2}/.test(date) ? date.slice(0, 7) : thisMonth();
   const ctx = await requireProject({ action: "edit", target: here(month) });
   if (!canAdd(ctx)) back(here(month), { error: "ไม่มีสิทธิ์เพิ่มนัดหมาย" });
-  try { await Cal.addEvent(ctx.db, { title: fv(f, "title"), date, time: fv(f, "time"), note: fv(f, "note"), leadId: fv(f, "lead") }, ctx.email); }
+  // โฟร์แมนผูกนัดกับลูกค้าไม่ได้ (ไม่เห็นข้อมูลลูกค้า)
+  try { await Cal.addEvent(ctx.db, { title: fv(f, "title"), date, time: fv(f, "time"), note: fv(f, "note"), leadId: ctx.role === "foreman" ? "" : fv(f, "lead") }, ctx.email); }
   catch (e) { back(`${here(month)}#add`, { error: errMsg(e) }); }
   revalidatePath("/calendar");
   back(here(month), { msg: "เพิ่มนัดหมายแล้ว" });
@@ -55,8 +56,8 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
   const mine = sp.mine === "1";
   const today = bkkDate();
   const [items, leads] = await Promise.all([
-    Cal.monthItems(ctx.db, month, { construction: !!ctx.project.construction_enabled, mine: mine ? ctx.email : undefined }),
-    canAdd(ctx) ? ctx.db.list("leads", { limit: 2000, orderBy: "updated_at", desc: true }) : Promise.resolve([]),
+    Cal.monthItems(ctx.db, month, { construction: !!ctx.project.construction_enabled, mine: mine ? ctx.email : undefined, foreman: ctx.role === "foreman" }),
+    canAdd(ctx) && ctx.role !== "foreman" ? ctx.db.list("leads", { limit: 2000, orderBy: "updated_at", desc: true }) : Promise.resolve([]),
   ]);
   const byDay = new Map<string, Cal.CalItem[]>();
   for (const it of items) (byDay.get(it.date) ?? byDay.set(it.date, []).get(it.date)!).push(it);
@@ -163,12 +164,12 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
               <label className="flex flex-col gap-1">วันที่<input type="date" name="date" required defaultValue={addDate} className={input} /></label>
               <label className="flex flex-col gap-1">เวลา (ถ้ามี)<input type="time" name="time" className={input} /></label>
             </div>
-            <label className="flex flex-col gap-1">ลูกค้า (ถ้ามี)
+            {ctx.role !== "foreman" && <label className="flex flex-col gap-1">ลูกค้า (ถ้ามี)
               <select name="lead" defaultValue={sp.lead ?? ""} className={input}>
                 <option value="">ไม่ผูกลูกค้า</option>
                 {openLeads.map((l) => <option key={l.id} value={l.id}>{String(l.name)}{l.plot_code ? ` · ${l.plot_code}` : ""}</option>)}
               </select>
-            </label>
+            </label>}
             <label className="flex flex-col gap-1">รายละเอียด<textarea name="note" rows={2} maxLength={1000} className="rounded-lg border border-slate-300 p-3" /></label>
             <button className="min-h-11 rounded-lg bg-brand-600 px-4 font-semibold text-white hover:bg-brand-700">เพิ่มนัดหมาย</button>
             <p className="text-xs text-slate-600">นัดติดตามลูกค้าตั้งที่หน้าลูกค้า (ช่อง &quot;นัดติดตามครั้งถัดไป&quot;) แล้วจะขึ้นในปฏิทินเอง</p>

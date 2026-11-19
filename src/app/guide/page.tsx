@@ -215,7 +215,7 @@ export default async function GuidePage() {
   };
 
   const sections: Sec[] = foreman
-    ? [start, buildForeman, help]
+    ? [start, buildForeman, { id: "calendar", title: "ปฏิทิน", body: <P>เมนู <Go href="/calendar">ปฏิทิน</Go> แสดงกำหนดเสร็จงวดงานและกำหนดส่งมอบบ้าน พร้อมนัดหมายของทีม เพิ่มนัดของคุณเองได้ เช่น นัดผู้รับเหมาหรือนัดตรวจงาน กด "เฉพาะของฉัน" เพื่อดูเฉพาะหลังที่คุณรับผิดชอบ</P> }, help]
     : [start, calendar, ...(builder ? [] : [plots]), leads, ...(builder ? [] : [promos, loans]), build, ...(buildOn && canSeeCosts(ctx.role) ? [costs] : []), marketing, team, ...(boss ? [settings, plan] : [settings]), help];
 
   return (

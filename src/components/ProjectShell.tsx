@@ -55,7 +55,7 @@ function navGroups(ctx: ProjectCtx, b: { leads: number; build: number }): NavGro
   const builder = ctx.project.kind === "builder";
   const build: NavItem = { href: "/build", label: builder ? "งานก่อสร้าง" : "ก่อสร้าง", icon: "build", badge: b.build };
   const guide: NavItem = { href: "/guide", label: "คู่มือการใช้งาน", icon: "guide" };
-  if (ctx.role === "foreman") return [{ title: "", items: [build, guide] }];
+  if (ctx.role === "foreman") return [{ title: "", items: [build, { href: "/calendar", label: "ปฏิทิน", icon: "calendar" }, guide] }];
   const groups: NavGroup[] = [
     { title: "", items: [{ href: "/", label: "ภาพรวม", icon: "home" }, { href: "/calendar", label: "ปฏิทิน", icon: "calendar" }] },
     { title: "งานขาย", items: builder

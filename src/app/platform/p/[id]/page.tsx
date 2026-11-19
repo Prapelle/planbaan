@@ -170,7 +170,7 @@ export default async function ProjectAdminPage({ params, searchParams }: { param
           <form action={constructionAction}><input type="hidden" name="id" value={id} /><input type="hidden" name="enabled" value={project.construction_enabled ? "" : "1"} />
             <button disabled={staffRole !== "admin"} className={`min-h-11 rounded-lg px-4 font-semibold ${project.construction_enabled ? "border border-red-300 text-red-700" : "bg-ops-btn text-white hover:bg-ops-btn-hover"}`}>{project.construction_enabled ? "ปิดส่วนก่อสร้าง" : "เปิดส่วนก่อสร้าง"}</button></form>
         </div>
-        <p className="mb-2 text-ops-muted">คิด {BUILD_PRICE().toLocaleString("th-TH")} บาทต่อหลังที่กำลังก่อสร้างในเดือนนั้น (เริ่มแล้วและยังไม่ส่งมอบก่อนต้นเดือน) · ออกบิลจากระบบบัญชีเอง</p>
+        <p className="mb-2 text-ops-muted">คิด {BUILD_PRICE().toLocaleString("th-TH")} บาทต่อหลังที่กำลังก่อสร้างในเดือนนั้น (เริ่มแล้วและยังไม่ส่งมอบก่อนต้นเดือน รวมหลังที่หยุดชั่วคราว) · ออกบิลจากระบบบัญชีเอง</p>
         <table className="w-full max-w-md"><thead><tr className="text-left text-ops-muted"><th className="pb-1 font-medium">เดือน</th><th className="pb-1 text-right font-medium">หลัง</th><th className="pb-1 text-right font-medium">ยอด (บาท)</th></tr></thead>
           <tbody>{billing.map((b) => <tr key={b.month} className="border-t border-ops-line"><td className="py-1">{b.month}</td><td className="py-1 text-right tabular-nums">{b.houses}</td><td className="py-1 text-right tabular-nums">{(b.houses * BUILD_PRICE()).toLocaleString("th-TH")}</td></tr>)}</tbody></table>
       </section>

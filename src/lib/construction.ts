@@ -310,7 +310,7 @@ export async function buildBoard(db: TenantDb, staleDays: number, now = new Date
   };
 }
 
-/** หลังที่คิดเงินในเดือน: เริ่มแล้วก่อนสิ้นเดือน และยังไม่ส่งมอบก่อนต้นเดือน */
+/** หลังที่คิดเงินในเดือน: เริ่มแล้วก่อนสิ้นเดือน และยังไม่ส่งมอบก่อนต้นเดือน (หลังที่หยุดชั่วคราวคิดเงินด้วย ตามที่เจ้าของตัดสินใจ) */
 export function billableInMonth(builds: Row[], month: string) {
   const start = `${month}-01`;
   const [y, m] = month.split("-").map(Number);

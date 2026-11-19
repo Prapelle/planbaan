@@ -115,3 +115,17 @@ await test("รอบสอง: แปลงให้เช่าจองไม
   const th = parseAdsCsv("วัน,ค่าใช้จ่าย\n13/11/2026,100\n02/11/2026,50\n", "google");
   assert.deepEqual(th.rows.map((r) => r.day), ["2026-11-13", "2026-11-02"]);
 });
+
+await test("โฟร์แมนในปฏิทิน: เห็นงานก่อสร้างและนัดทั่วไป ไม่เห็นลูกค้า / หลังหยุดชั่วคราวยังคิดเงิน", async () => {
+  const Cal = await import("../src/lib/calendar");
+  const l = await S.createLead(db, { name: "ลูกค้าลับ", nextFollowAt: "2026-12-05" }, "s");
+  await Cal.addEvent(db, { title: "นัดลูกค้า", date: "2026-12-06", leadId: l.id }, "s");
+  await Cal.addEvent(db, { title: "ประชุมผู้รับเหมา", date: "2026-12-07" }, "o");
+  const b = await C.createBuild(db, { title: "บ้านปฏิทิน", customerName: "คุณลับ", startDate: "2026-11-01", dueDate: "2026-12-20" }, "o");
+  const items = await Cal.monthItems(db, "2026-12", { construction: true, foreman: true });
+  const text = JSON.stringify(items);
+  assert.ok(text.includes("ประชุมผู้รับเหมา") && text.includes("บ้านปฏิทิน"));
+  assert.ok(!text.includes("ลูกค้าลับ") && !text.includes("นัดลูกค้า") && !text.includes("คุณลับ"));
+  await C.updateBuild(db, b.id, { status: "paused" }, "o");
+  assert.equal(C.billableInMonth([await db.get("builds", b.id) as never], "2026-12"), 1);
+});

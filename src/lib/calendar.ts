@@ -49,17 +49,19 @@ export async function removeEvent(db: TenantDb, id: string, actor: string, canMa
   await db.remove("events", id);
 }
 
-export async function monthItems(db: TenantDb, month: string, opts: { construction: boolean; mine?: string }) {
+/** foreman: โฟร์แมนเห็นเฉพาะงานก่อสร้างและนัดที่ไม่ผูกลูกค้า ไม่เห็นชื่อ/เบอร์ลูกค้า */
+export async function monthItems(db: TenantDb, month: string, opts: { construction: boolean; mine?: string; foreman?: boolean }) {
   const inMonth = (d: unknown) => typeof d === "string" && d.startsWith(month);
   const [events, leads, builds, stages] = await Promise.all([
     db.list("events", { where: { event_month: month }, limit: 2000 }),
-    listAll(db, "leads"),
+    opts.foreman ? Promise.resolve([]) : listAll(db, "leads"),
     opts.construction ? listAll(db, "builds") : Promise.resolve([]),
     opts.construction ? listAll(db, "build_stages") : Promise.resolve([]),
   ]);
   const leadName = new Map(leads.map((l) => [String(l.id), String(l.name)]));
   const items: CalItem[] = [];
   for (const e of events) {
+    if (opts.foreman && e.lead_id) continue;
     items.push({
       date: String(e.event_date), time: String(e.event_time), kind: "event", title: String(e.title),
       sub: [e.lead_id ? `ลูกค้า ${leadName.get(String(e.lead_id)) ?? ""}` : "", String(e.note)].filter(Boolean).join(" · "),
@@ -74,7 +76,7 @@ export async function monthItems(db: TenantDb, month: string, opts: { constructi
   const buildBy = new Map(builds.map((b) => [String(b.id), b]));
   for (const b of builds) {
     if (b.status === "done") continue;
-    if (inMonth(b.due_date)) items.push({ date: String(b.due_date), time: "", kind: "due", title: String(b.title), sub: b.customer_name ? `เจ้าของบ้าน ${b.customer_name}` : "", href: `/build/${b.id}`, owner: String(b.owner_email ?? "") });
+    if (inMonth(b.due_date)) items.push({ date: String(b.due_date), time: "", kind: "due", title: String(b.title), sub: b.customer_name && !opts.foreman ? `เจ้าของบ้าน ${b.customer_name}` : "", href: `/build/${b.id}`, owner: String(b.owner_email ?? "") });
   }
   for (const s of stages) {
     const b = buildBy.get(String(s.build_id));

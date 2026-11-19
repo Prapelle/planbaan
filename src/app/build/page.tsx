@@ -81,7 +81,7 @@ export default async function BuildPage({ searchParams }: { searchParams: Promis
             <li>หน้าติดตามของเจ้าของบ้านผ่านลิงก์ส่วนตัว ไม่ต้องล็อกอิน</li>
             <li>สถานะบ้านในผังแปลงอัปเดตเองตามงวดงาน</li>
           </ul>
-          <p className="text-sm">ราคา {baht(BUILD_PRICE)} บาทต่อหลังที่กำลังก่อสร้างต่อเดือน (หลังที่ส่งมอบแล้วไม่คิดเงิน) · ติดต่อทีม PlanBaan เพื่อเปิดใช้</p>
+          <p className="text-sm">ราคา {baht(BUILD_PRICE)} บาทต่อหลังที่กำลังก่อสร้างต่อเดือน (รวมหลังที่หยุดชั่วคราว หลังที่ส่งมอบแล้วไม่คิดเงิน) · ติดต่อทีม PlanBaan เพื่อเปิดใช้</p>
         </div>
       </ProjectShell>
     );
@@ -225,7 +225,7 @@ export default async function BuildPage({ searchParams }: { searchParams: Promis
             <h2 className="font-semibold">เตือนหลังที่ไม่อัปเดต</h2>
             <label className="flex flex-col gap-1">เตือนเมื่อไม่มีอัปเดตเกิน (วัน)<input type="number" name="days" min={1} max={60} defaultValue={staleDays} className={input} /></label>
             <button className="min-h-11 rounded-md border border-slate-400 px-4 font-semibold">บันทึก</button>
-            <p className="text-xs text-slate-600">นับจากการติ๊กงวด ถ่ายรูป หรือบันทึกหน้างานครั้งล่าสุด · คิดเงิน {baht(BUILD_PRICE)} บาทต่อหลังที่กำลังก่อสร้างต่อเดือน</p>
+            <p className="text-xs text-slate-600">นับจากการติ๊กงวด ถ่ายรูป หรือบันทึกหน้างานครั้งล่าสุด · คิดเงิน {baht(BUILD_PRICE)} บาทต่อหลังที่ยังไม่ส่งมอบต่อเดือน (รวมหลังที่หยุดชั่วคราว)</p>
           </form>
         </div>
       )}
