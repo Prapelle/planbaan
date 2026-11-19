@@ -12,7 +12,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth(() => {
   const base = (process.env.BASE_DOMAIN ?? "").trim().toLowerCase();
   return {
     providers: [Google],
-    session: { strategy: "jwt", maxAge: 12 * 60 * 60 },
+    // ล็อกอินครั้งเดียวอยู่ได้ 30 วัน · สิทธิ์เข้าโครงการยังตรวจจากฐานข้อมูลทุกครั้ง เอาผู้ใช้ออกแล้วเข้าไม่ได้ทันที
+    session: { strategy: "jwt", maxAge: 30 * 24 * 60 * 60 },
     pages: { signIn: "/login", error: "/login" },
     trustHost: true,
     cookies: base
