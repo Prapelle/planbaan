@@ -225,8 +225,17 @@ export async function marketingReport(db: TenantDb, monthRaw: string, trendMonth
     cur.amount += Number(r.amount); cur.days++;
     byCampaign.set(k, cur);
   }
+  // เหตุผลที่ไม่ซื้อ ของลูกค้าที่เข้ามาในช่วงกราฟ (6 เดือน) แยกช่องทาง
+  const inWindow = new Set(months);
+  const lost = leads.filter((l) => l.stage === "lost" && inWindow.has(bkkDate(new Date(String(l.created_at))).slice(0, 7)));
+  const lostReasons = [...lost.reduce((m, l) => {
+    const r = String(l.lost_reason || "none");
+    const cur = m.get(r) ?? { reason: r, count: 0, byChannel: {} as Record<string, number> };
+    cur.count++; cur.byChannel[String(l.channel)] = (cur.byChannel[String(l.channel)] ?? 0) + 1;
+    return m.set(r, cur);
+  }, new Map<string, { reason: string; count: number; byChannel: Record<string, number> }>()).values()].sort((a, b) => b.count - a.count);
   return {
-    month, channels, total, trend,
+    month, channels, total, trend, lostReasons, lostTotal: lost.length, windowFrom: months[0],
     campaigns: [...byCampaign.values()].sort((a, b) => b.amount - a.amount),
     recentSpend: [...spend].sort((a, b) => String(b.day).localeCompare(String(a.day))).slice(0, 50),
     budgetByChannel: Object.fromEntries(budget.map((b) => [String(b.channel), Number(b.amount)])),

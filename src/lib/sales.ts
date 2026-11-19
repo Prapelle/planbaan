@@ -38,6 +38,18 @@ export const HOUSE_LABEL: Record<HouseStatus, string> = { not_started: "ยั�
 
 export const STALE_DAYS = 3;
 
+/** เหตุผลที่ไม่ซื้อ/ไม่สร้าง (ชุดมาตรฐาน ชื่อต่างกันตามประเภทธุรกิจ) */
+export const LOST_REASONS = ["price", "loan", "competitor", "location", "design", "not_ready", "unreachable", "other"] as const;
+export type LostReason = (typeof LOST_REASONS)[number];
+const LOST_DEV: Record<LostReason, string> = {
+  price: "ราคาสูง งบไม่พอ", loan: "กู้ไม่ผ่าน", competitor: "ซื้อโครงการอื่น", location: "ทำเลไม่ตรงความต้องการ",
+  design: "แบบบ้านหรือพื้นที่ไม่ตรง", not_ready: "ยังไม่พร้อม ชะลอการซื้อ", unreachable: "ติดต่อไม่ได้", other: "อื่น ๆ",
+};
+const LOST_BUILDER: Record<LostReason, string> = {
+  ...LOST_DEV, competitor: "เลือกบริษัทอื่น", location: "ยังไม่มีที่ดิน หรือที่ดินมีปัญหา", not_ready: "ยังไม่พร้อม ชะลอการสร้าง",
+};
+export const lostLabels = (kind?: string) => (kind === "builder" ? LOST_BUILDER : LOST_DEV);
+
 // ── ตัวช่วย ──
 const one = <T extends string>(list: readonly T[], v: unknown, field: string): T => {
   const s = String(v ?? "").trim();
@@ -217,21 +229,31 @@ export async function updateLead(db: TenantDb, id: string, input: LeadInput, act
   await db.batch(keep([{ kind: "update", table: "leads", id, patch }, activityOp(id, "edit", actor), ...ops]));
 }
 
-export async function moveLead(db: TenantDb, id: string, stageRaw: string, actor: string, opts: { requirePlot?: boolean } = {}) {
+export async function moveLead(db: TenantDb, id: string, stageRaw: string, actor: string, opts: { requirePlot?: boolean; lostReason?: string; lostNote?: string; kind?: string } = {}) {
   const lead = await db.get("leads", id);
   if (!lead) throw new Error("ไม่พบลูกค้ารายนี้");
   const stage = one(STAGES, stageRaw, "ขั้น");
   const from = String(lead.stage);
   if (stage === from) return;
   const plot = String(lead.plot_code);
+  // ไม่ซื้อ/ไม่สร้าง ต้องมีเหตุผล · ลูกค้ากลับมาใหม่ → ล้างเหตุผลเดิม (ยังอยู่ในประวัติ)
+  const lostPatch: Record<string, unknown> = {};
+  let lostText = "";
+  if (stage === "lost") {
+    const reason = one(LOST_REASONS, opts.lostReason, "เหตุผลที่ไม่ซื้อ");
+    const note = cleanText(opts.lostNote, 300);
+    if (reason === "other" && !note) throw new Error("เลือก อื่น ๆ ต้องพิมพ์รายละเอียด");
+    Object.assign(lostPatch, { lost_reason: reason, lost_note: note });
+    lostText = `เหตุผล: ${lostLabels(opts.kind)[reason]}${note ? ` · ${note}` : ""}`;
+  } else if (from === "lost") Object.assign(lostPatch, { lost_reason: "", lost_note: "" });
   if (opts.requirePlot !== false && stageIdx(stage) >= BOOKED_IDX && !plot) throw new Error("เลือกแปลงให้ลูกค้าก่อนเลื่อนไปขั้นจอง");
   // เข้าขั้นจองครั้งแรก: ส่วนลดเกินเกณฑ์ต้องได้รับอนุมัติก่อน (อ่านพร้อมสถานะแปลงในรอบเดียว)
   const crossing = !!plot && stageIdx(stage) >= BOOKED_IDX && stageIdx(from) < BOOKED_IDX;
   const [st] = await Promise.all([plotState(db, plot, id), crossing ? assertDiscountOk(db, lead) : Promise.resolve()]);
   checkPlotState(plot, st, stage);
   await db.batch(keep([
-    { kind: "update", table: "leads", id, patch: { stage, last_contact_at: new Date().toISOString(), max_stage: Math.max(Number(lead.max_stage ?? 0), stageIdx(stage)) } },
-    activityOp(id, "stage", actor, { from, to: stage }),
+    { kind: "update", table: "leads", id, patch: { stage, last_contact_at: new Date().toISOString(), max_stage: Math.max(Number(lead.max_stage ?? 0), stageIdx(stage)), ...lostPatch } },
+    activityOp(id, "stage", actor, { from, to: stage, note: lostText }),
     plotUpdate(st, stage),
   ]));
 }

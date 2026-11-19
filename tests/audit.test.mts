@@ -69,3 +69,20 @@ await test("อ่านเฉพาะคอลัมน์ที่ขอ (bac
   assert.equal(b.start_date, "2026-11-01");
   await rejects(db.list("builds", { columns: ["nope"] }), /คอลัมน์/);
 });
+
+await test("ไม่ซื้อต้องมีเหตุผล / อื่น ๆ ต้องมีรายละเอียด / กลับมาใหม่ล้างเหตุผล / สรุปในหน้าการตลาด", async () => {
+  const l = await S.createLead(db, { name: "ไม่ซื้อ", channel: "facebook" }, "s");
+  await rejects(S.moveLead(db, l.id, "lost", "s"), /เหตุผล/);
+  await rejects(S.moveLead(db, l.id, "lost", "s", { lostReason: "other" }), /รายละเอียด/);
+  await S.moveLead(db, l.id, "lost", "s", { lostReason: "competitor", lostNote: "ซื้อโครงการ ก." });
+  let row = (await db.get("leads", l.id))!;
+  assert.deepEqual([row.lost_reason, row.lost_note], ["competitor", "ซื้อโครงการ ก."]);
+  assert.match(String((await S.leadHistory(db, l.id))[0].note), /ซื้อโครงการอื่น · ซื้อโครงการ ก\./);
+  assert.equal(S.lostLabels("builder").competitor, "เลือกบริษัทอื่น");
+  const { marketingReport, thisMonth: tm } = await import("../src/lib/marketing");
+  const rep = await marketingReport(db, tm());
+  assert.deepEqual(rep.lostReasons.map((x) => [x.reason, x.count, x.byChannel.facebook]), [["competitor", 1, 1]]);
+  await S.moveLead(db, l.id, "contacted", "s");
+  row = (await db.get("leads", l.id))!;
+  assert.deepEqual([row.lost_reason, row.lost_note], ["", ""]);
+});

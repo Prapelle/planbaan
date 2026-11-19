@@ -56,7 +56,7 @@ await test("แปลงที่มีคนจองแล้ว คนอื�
 });
 
 await test("ลูกค้าถอยขั้นหรือไม่ซื้อ แปลงกลับเป็นว่าง", async () => {
-  await S.moveLead(db, a.id, "lost", "s@x.com");
+  await S.moveLead(db, a.id, "lost", "s@x.com", { lostReason: "price" });
   assert.equal((await plot("A02"))?.sale_status, "available");
   await S.moveLead(db, b.id, "booked", "s@x.com");
   assert.equal((await plot("A02"))?.sale_status, "booked");

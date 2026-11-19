@@ -114,6 +114,7 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
                       <Link href={`/leads/${l.id}`} className="font-semibold text-slate-900 underline-offset-2 hover:underline">{String(l.name)}</Link>
                       <span className="text-xs text-slate-600">{S.CHANNEL_LABEL[l.channel as S.Channel] ?? String(l.channel)} · {String(l.plot_code) || "ยังไม่เลือกแปลง"}</span>
                       <span className="text-xs text-slate-600">ดูแลโดย {nameOf(l.owner_email)}</span>
+                      {stage === "lost" && !!l.lost_reason && <span className="text-xs text-slate-700">{S.lostLabels(ctx.project.kind)[l.lost_reason as S.LostReason] ?? ""}</span>}
                       {stale && <span className="text-xs font-semibold text-red-700">ค้าง {S.daysSince(String(l.last_contact_at), now)} วัน</span>}
                       {!!l.next_follow_at && !S.isClosed(stage) && <span className="text-xs">นัด {String(l.next_follow_at)}</span>}
                       {stage === "loan" && (() => {

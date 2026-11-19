@@ -5,7 +5,7 @@ import { requireProject } from "@/lib/context";
 import { back, baht, errMsg, fv } from "@/lib/form";
 import { canEditMarketing } from "@/lib/roles";
 import * as M from "@/lib/marketing";
-import { CHANNEL_LABEL, type Channel, bkkDate } from "@/lib/sales";
+import { CHANNEL_LABEL, type Channel, type LostReason, bkkDate, lostLabels, stageLabels } from "@/lib/sales";
 
 export const dynamic = "force-dynamic";
 const MAX_FILE = 3 * 1024 * 1024;
@@ -176,6 +176,22 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
             );
           })}
         </ul>
+      </section>
+
+      <section className="mb-4 rounded-lg border border-slate-200 bg-white p-4">
+        <h2 className="mb-1 font-semibold">เหตุผลที่{stageLabels(ctx.project.kind).lost}</h2>
+        <p className="mb-3 text-xs text-slate-600">ลูกค้าที่เข้ามาตั้งแต่เดือน {r.windowFrom} และตอนนี้อยู่ขั้น{stageLabels(ctx.project.kind).lost} รวม {r.lostTotal} ราย</p>
+        {r.lostReasons.length === 0 ? <p className="text-sm text-slate-600">ยังไม่มีลูกค้าที่{stageLabels(ctx.project.kind).lost}ในช่วงนี้</p> : (
+          <ul className="flex flex-col gap-2 text-sm">
+            {r.lostReasons.map((x) => (
+              <li key={x.reason} className="grid grid-cols-[minmax(0,12rem)_1fr_auto] items-center gap-3">
+                <span>{x.reason === "none" ? "ไม่ได้ระบุ (ก่อนมีช่องเหตุผล)" : lostLabels(ctx.project.kind)[x.reason as LostReason] ?? x.reason}</span>
+                <span className="h-3 rounded bg-slate-100" aria-hidden="true"><span className="block h-3 rounded bg-red-600/70" style={{ width: `${(x.count / r.lostReasons[0].count) * 100}%` }} /></span>
+                <span className="tabular-nums"><b>{x.count}</b> <span className="text-xs text-slate-600">{Object.entries(x.byChannel).sort((a, b) => b[1] - a[1]).map(([c, n]) => `${CHANNEL_LABEL[c as Channel] ?? c} ${n}`).join(" · ")}</span></span>
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
 
       {canEdit && (

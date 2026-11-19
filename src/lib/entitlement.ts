@@ -13,7 +13,7 @@
 import { type D1Like, nowIso } from "./d1";
 
 export const ENT = {
-  trialDays: Number(process.env.TRIAL_DAYS ?? 60),
+  trialDays: Number(process.env.TRIAL_DAYS ?? 90),
   pureMin: Number(process.env.PURE_MIN_BAHT ?? 30000),   // ยังรอเจ้าของตัดสินใจ: ค่าชั่วคราว
   windowMonths: 3,
   warnDays: 30, // แผน: แจ้งล่วงหน้า 30 วันก่อนหมดสิทธิ์

@@ -18,7 +18,7 @@ await test("รวมวันที่จากระบบ: นัดติด
   await S.createPlotsBulk(db, { zone: "A", count: 2 });
   const a = await S.createLead(db, { name: "คุณวิชัย", nextFollowAt: `${M}-05`, ownerEmail: "s1@x.com" }, "s1@x.com");
   const lost = await S.createLead(db, { name: "ไม่ซื้อแล้ว", nextFollowAt: `${M}-05` }, "s1@x.com");
-  await S.moveLead(db, lost.id, "lost", "s1@x.com");
+  await S.moveLead(db, lost.id, "lost", "s1@x.com", { lostReason: "unreachable" });
   const loanLead = await S.createLead(db, { name: "คุณมาลี", plotCode: "A01", ownerEmail: "s2@x.com" }, "s2@x.com");
   await S.moveLead(db, loanLead.id, "loan", "s2@x.com");
   await db.update("leads", loanLead.id, { debt_retry_at: `${M}-20` });

@@ -40,7 +40,7 @@ async function stageAction(f: FormData) {
   const id = fv(f, "id");
   const ctx = await guardEdit(id);
   try {
-    await S.moveLead(ctx.db, id, fv(f, "stage"), ctx.email, { requirePlot: ctx.project.kind !== "builder" });
+    await S.moveLead(ctx.db, id, fv(f, "stage"), ctx.email, { requirePlot: ctx.project.kind !== "builder", lostReason: fv(f, "lost_reason"), lostNote: fv(f, "lost_note"), kind: ctx.project.kind });
     await ctx.usage("lead_stage_changed", { to: fv(f, "stage") });
   } catch (e) { back(`/leads/${id}`, { error: errMsg(e) }); }
   revalidatePath(`/leads/${id}`);
@@ -118,9 +118,12 @@ export default async function LeadPage({ params, searchParams }: { params: Promi
       </div>
       <Notice error={error} msg={msg} />
 
+      {stage === "lost" && !!lead.lost_reason && (
+        <p className="mb-3 rounded-md bg-slate-100 px-3 py-2 text-sm">เหตุผลที่{S.stageLabels(ctx.project.kind).lost}: <b>{S.lostLabels(ctx.project.kind)[lead.lost_reason as S.LostReason] ?? String(lead.lost_reason)}</b>{lead.lost_note ? ` · ${String(lead.lost_note)}` : ""}</p>
+      )}
       {canEdit && (
-        <div className="mb-4 flex flex-wrap gap-2" aria-label="เปลี่ยนขั้น">
-          {[...S.PIPELINE, "lost" as const].map((s) => (
+        <div className="mb-4 flex flex-wrap items-start gap-2" aria-label="เปลี่ยนขั้น">
+          {S.PIPELINE.map((s) => (
             <form key={s} action={stageAction}>
               <input type="hidden" name="id" value={id} /><input type="hidden" name="stage" value={s} />
               <button disabled={s === stage} aria-pressed={s === stage}
@@ -129,6 +132,29 @@ export default async function LeadPage({ params, searchParams }: { params: Promi
               </button>
             </form>
           ))}
+          {stage === "lost" ? (
+            <span aria-current="true" className="flex min-h-10 items-center rounded-full border border-brand-700 bg-brand-700 px-3 text-sm font-medium text-white">{S.stageLabels(ctx.project.kind).lost}</span>
+          ) : (
+            <details className="group basis-full sm:basis-auto">
+              <summary className="flex min-h-10 cursor-pointer list-none items-center rounded-full border border-slate-300 bg-white px-3 text-sm font-medium hover:bg-slate-100 group-open:border-red-300 group-open:bg-red-50">{S.stageLabels(ctx.project.kind).lost}…</summary>
+              <form action={stageAction} className="mt-2 flex max-w-md flex-col gap-2 rounded-lg border border-red-200 bg-white p-3 text-sm shadow-sm">
+                <input type="hidden" name="id" value={id} /><input type="hidden" name="stage" value="lost" />
+                <fieldset className="flex flex-col gap-1">
+                  <legend className="mb-1 font-semibold">เหตุผลที่{S.stageLabels(ctx.project.kind).lost}</legend>
+                  <div className="flex flex-wrap gap-2">
+                    {S.LOST_REASONS.map((r) => (
+                      <label key={r} className="flex min-h-10 cursor-pointer items-center rounded-full border border-slate-300 px-3 has-[:checked]:border-red-700 has-[:checked]:bg-red-700 has-[:checked]:text-white">
+                        <input type="radio" name="lost_reason" value={r} required className="sr-only" />{S.lostLabels(ctx.project.kind)[r]}
+                      </label>
+                    ))}
+                  </div>
+                </fieldset>
+                <label className="flex flex-col gap-1">รายละเอียด (ต้องใส่ถ้าเลือก อื่น ๆ)<input name="lost_note" maxLength={300} placeholder="เช่น ซื้อโครงการ ก. ราคาถูกกว่า 2 แสน" className="min-h-11 rounded-md border border-slate-300 px-3" /></label>
+                {!!lead.plot_code && ctx.project.kind !== "builder" && S.stageIdx(stage) >= S.stageIdx("booked") && <p className="text-xs text-red-700">แปลง {String(lead.plot_code)} จะกลับเป็นว่าง</p>}
+                <button className="min-h-11 rounded-md bg-red-700 px-4 font-semibold text-white hover:bg-red-800">ยืนยัน {S.stageLabels(ctx.project.kind).lost}</button>
+              </form>
+            </details>
+          )}
         </div>
       )}
 

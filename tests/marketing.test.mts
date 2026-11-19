@@ -72,7 +72,7 @@ await test("ต้นทุนต่อลูกค้า/เข้าชม/จ
   await S.moveLead(db, l1.id, "visited", "s@x.com");
   await S.moveLead(db, l1.id, "booked", "s@x.com");
   await S.moveLead(db, l2.id, "visited", "s@x.com");
-  await S.moveLead(db, l2.id, "lost", "s@x.com"); // เข้าชมแล้วไม่ซื้อ ยังนับเป็นการเข้าชม
+  await S.moveLead(db, l2.id, "lost", "s@x.com", { lostReason: "competitor" }); // เข้าชมแล้วไม่ซื้อ ยังนับเป็นการเข้าชม
   const rep = await M.marketingReport(db, month);
   const fb = rep.channels.find((c) => c.channel === "facebook")!;
   assert.deepEqual([fb.leads, fb.visits, fb.bookings], [3, 2, 1]);
