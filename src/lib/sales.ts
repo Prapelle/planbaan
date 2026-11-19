@@ -139,6 +139,19 @@ export async function recomputePlot(db: TenantDb, code: string) {
 }
 
 // ── ลูกค้า ──
+/** เบอร์เดียวกันแม้เขียนต่างกัน (0812345678 = +66812345678 = 081-234-5678): เทียบ 9 หลักท้าย */
+export const phoneKey = (p: unknown) => { const d = String(p ?? "").replace(/\D/g, ""); return d.length >= 9 ? d.slice(-9) : ""; };
+export class DuplicatePhoneError extends Error {
+  constructor(public lead: { id: string; name: string }) { super(`เบอร์นี้มีอยู่แล้ว: ${lead.name}`); }
+}
+/** ลูกค้ารายอื่นที่ใช้เบอร์เดียวกัน (ไม่นับรายที่ระบุ) */
+export async function findByPhone(db: TenantDb, phone: unknown, exceptId?: string) {
+  const k = phoneKey(phone);
+  if (!k) return null;
+  const rows = await db.list("leads", { limit: 2000, columns: ["name", "phone", "stage"] });
+  const hit = rows.find((l) => l.id !== exceptId && phoneKey(l.phone) === k);
+  return hit ? { id: hit.id, name: String(hit.name), stage: String(hit.stage) } : null;
+}
 export type LeadInput = { name?: string; phone?: string; channel?: string; plotCode?: string; ownerEmail?: string; nextFollowAt?: string; note?: string; stage?: string };
 
 const SOLD = new Set(["booked", "loan", "transferred"]);
@@ -180,9 +193,10 @@ const keep = (ops: (BatchOp | null)[]) => ops.filter((o): o is BatchOp => o !== 
 
 // แต่ละคำสั่งด้านล่างคุยกับฐานข้อมูลไม่เกิน 3 รอบ: อ่านลูกค้า → อ่านแปลง (พร้อมกัน) → เขียนทั้งหมดในรอบเดียว
 
-export async function createLead(db: TenantDb, input: LeadInput, actor: string) {
+export async function createLead(db: TenantDb, input: LeadInput, actor: string, opts: { allowDuplicate?: boolean } = {}) {
   const name = cleanText(input.name, 120);
   if (!name) throw new Error("ต้องมีชื่อลูกค้า");
+  if (!opts.allowDuplicate) { const dup = await findByPhone(db, input.phone); if (dup) throw new DuplicatePhoneError(dup); }
   const channel = one(CHANNELS, input.channel || "other", "ช่องทาง");
   const stage = one(STAGES, input.stage || "new", "ขั้น");
   const plot = input.plotCode ? cleanCode(input.plotCode) : "";

@@ -3,7 +3,10 @@ import { ProjectShell } from "@/components/ProjectShell";
 import { LegalLinks } from "@/components/LegalPage";
 import { cfg, projectUrl, requireProject, sessionEmail, where } from "@/lib/context";
 import { controlDb, getEnv } from "@/lib/d1";
-import { getStaffRole, projectsOfEmail } from "@/lib/control";
+import { getStaffRole, listMembers, projectsOfEmail } from "@/lib/control";
+import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
+import * as O from "@/lib/onboarding";
 import { ROLE_LABEL } from "@/lib/roles";
 import * as S from "@/lib/sales";
 import * as C from "@/lib/construction";
@@ -50,11 +53,21 @@ export default async function Home() {
   );
 }
 
+async function hideOnboarding() {
+  "use server";
+  const ctx = await requireProject({ action: "edit", target: "/" });
+  if (ctx.role === "owner" || ctx.role === "manager") await O.setFlag(ctx.db, "onboarding_hidden");
+  revalidatePath("/");
+  redirect("/");
+}
+
 async function ProjectHome() {
   const ctx = await requireProject({ action: "view", target: "/" });
   await ctx.usage("page_view", { page: "home" });
   const builder = ctx.project.kind === "builder";
   const month = S.bkkDate().slice(0, 7);
+  const boss = ctx.role === "owner" || ctx.role === "manager";
+  const onboarding = boss ? await O.checklist(ctx.db, { kind: ctx.project.kind, construction: !!ctx.project.construction_enabled, members: (await listMembers(controlDb(ctx.env), ctx.project.id)).length }) : null;
   const [o, board, spendRows] = await Promise.all([
     S.overview(ctx.db, new Date(), ctx.project.kind),
     ctx.project.construction_enabled ? C.buildBoard(ctx.db, Number(ctx.project.build_stale_days ?? 7)) : Promise.resolve(null),
@@ -90,6 +103,24 @@ async function ProjectHome() {
   return (
     <ProjectShell ctx={ctx} active="/">
       <h1 className="mb-4 text-2xl font-bold">ภาพรวม</h1>
+      {onboarding && !onboarding.hidden && !onboarding.done && (
+        <section aria-label="เริ่มต้นใช้งาน" className="mb-5 rounded-xl border border-brand-200 bg-brand-50 p-4">
+          <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+            <h2 className="text-lg font-bold text-brand-800">เริ่มต้นใช้งาน {onboarding.steps.filter((x) => x.done).length}/{onboarding.steps.length}</h2>
+            {!ctx.readonly && <form action={hideOnboarding}><button className="min-h-10 rounded-md px-3 text-sm text-slate-600 underline hover:text-slate-900">ซ่อน</button></form>}
+          </div>
+          <ol className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4">
+            {onboarding.steps.map((st, i) => (
+              <li key={st.key}>
+                <Link href={st.href} className={`flex h-full items-start gap-3 rounded-lg border bg-white p-3 ${st.done ? "border-emerald-200" : "border-slate-200 hover:border-brand-500"}`}>
+                  <span aria-hidden="true" className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-sm font-bold ${st.done ? "bg-emerald-600 text-white" : "bg-brand-100 text-brand-800"}`}>{st.done ? "✓" : i + 1}</span>
+                  <span><span className={`block font-semibold ${st.done ? "text-slate-500 line-through" : ""}`}>{st.label}</span><span className="block text-xs text-slate-600">{st.done ? "เสร็จแล้ว" : st.hint}</span></span>
+                </Link>
+              </li>
+            ))}
+          </ol>
+        </section>
+      )}
       <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
         {kpis.map((k) => (
           <div key={k.label} className="rounded-lg border border-slate-200 bg-white p-4">

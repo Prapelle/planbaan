@@ -36,10 +36,17 @@ export const TENANT_TABLES = {
  * อ่านข้ามโครงการโดยตั้งใจ จึงอยู่ในไฟล์นี้ที่เดียว
  */
 export async function rowCountsByProject(db: D1Like): Promise<Record<string, number>> {
-  // ทุกตารางในรอบเดียวด้วย D1 batch (เดิมทีละตาราง ~30 รอบ ทำให้หลังบ้านช้า · UNION ALL ยาวเกินที่ D1 รับ)
-  const res = await db.batch(Object.keys(TENANT_TABLES).map((t) => db.prepare(`SELECT project_id, COUNT(*) AS n FROM "${t}" GROUP BY project_id`)));
   const out: Record<string, number> = {};
-  for (const r of res) for (const x of (r.results ?? []) as { project_id: string; n: number }[]) out[x.project_id] = (out[x.project_id] ?? 0) + Number(x.n);
+  for (const [pid, t] of Object.entries(await rowCountsByTable(db))) out[pid] = Object.values(t).reduce((a, n) => a + n, 0);
+  return out;
+}
+/** จำนวนแถวต่อโครงการต่อตาราง (นับอย่างเดียว ไม่อ่านเนื้อหา) — ใช้ดูขนาดและขั้นการเริ่มต้นใช้ในหลังบ้าน */
+export async function rowCountsByTable(db: D1Like): Promise<Record<string, Partial<Record<TenantTable, number>>>> {
+  // ทุกตารางในรอบเดียวด้วย D1 batch (เดิมทีละตาราง ~30 รอบ ทำให้หลังบ้านช้า · UNION ALL ยาวเกินที่ D1 รับ)
+  const tables = Object.keys(TENANT_TABLES) as TenantTable[];
+  const res = await db.batch(tables.map((t) => db.prepare(`SELECT project_id, COUNT(*) AS n FROM "${t}" GROUP BY project_id`)));
+  const out: Record<string, Partial<Record<TenantTable, number>>> = {};
+  res.forEach((r, i) => { for (const x of (r.results ?? []) as { project_id: string; n: number }[]) (out[x.project_id] ??= {})[tables[i]] = Number(x.n); });
   return out;
 }
 

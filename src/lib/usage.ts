@@ -8,7 +8,7 @@ import { type D1Like, nowIso } from "./d1";
 
 export const USAGE_EVENTS = [
   "login", "page_view", "member_added", "member_removed", "support_granted", "support_revoked",
-  "plot_created", "plot_updated", "lead_created", "lead_stage_changed", "export", "marketing_import", "marketing_updated",
+  "plot_created", "plot_updated", "lead_created", "lead_stage_changed", "export", "marketing_import", "marketing_updated", "pwa_opened", "import",
 ] as const;
 export type UsageEvent = (typeof USAGE_EVENTS)[number];
 

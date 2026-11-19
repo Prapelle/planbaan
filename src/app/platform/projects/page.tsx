@@ -78,12 +78,12 @@ export default async function PlatformProjects({ searchParams }: { searchParams:
         <table className="w-full min-w-[860px] text-sm">
           <thead><tr className="text-left text-[13px] text-ops-muted">
             <th className="px-4 py-3 font-semibold">โครงการ</th><th className="px-4 py-3 font-semibold">สิทธิ์ใช้งาน</th>
-            <th className="px-4 py-3 font-semibold">ก่อสร้าง</th><th className="px-4 py-3 font-semibold">ใช้ล่าสุด</th>
+            <th className="px-4 py-3 font-semibold">ก่อสร้าง</th><th className="px-4 py-3 font-semibold">เริ่มต้นใช้</th><th className="px-4 py-3 font-semibold">ใช้ล่าสุด</th>
             <th className="px-4 py-3 text-right font-semibold">ผู้ใช้ 7 วัน</th><th className="px-4 py-3 text-right font-semibold">สมาชิก</th>
             <th className="px-4 py-3 text-right font-semibold">ข้อมูล (แถว)</th>
           </tr></thead>
           <tbody>
-            {shown.length === 0 && <tr><td colSpan={7} className="px-4 py-5 text-ops-muted">ไม่พบโครงการตามเงื่อนไขนี้</td></tr>}
+            {shown.length === 0 && <tr><td colSpan={8} className="px-4 py-5 text-ops-muted">ไม่พบโครงการตามเงื่อนไขนี้</td></tr>}
             {shown.map((r) => (
               <tr key={r.id} className="border-t border-ops-line hover:bg-ops-bg/60">
                 <td className="px-4 py-3"><Link href={`/platform/p/${r.id}`} className="font-semibold text-ops-ink underline-offset-2 hover:underline">{r.name}</Link>
@@ -91,6 +91,7 @@ export default async function PlatformProjects({ searchParams }: { searchParams:
                 <td className="px-4 py-3"><span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-bold ${STATE_CLS[r.ent.state]}`}>{STATE_LABEL[r.ent.state]}</span>
                   {r.ent.until && <div className="mt-0.5 text-xs text-ops-muted">ถึง {r.ent.until}</div>}</td>
                 <td className="px-4 py-3 text-ops-ink">{r.construction_enabled ? "เปิด" : "ปิด"}</td>
+                <td className="px-4 py-3"><span className="flex items-center gap-2"><span aria-hidden="true" className="flex gap-0.5">{[1, 2, 3, 4].map((i) => <span key={i} className={`h-2 w-3 rounded-sm ${i <= r.onboard.n ? (r.onboard.n === 4 ? "bg-emerald-600" : "bg-ops-btn") : "bg-ops-line"}`} />)}</span><span className={`text-xs ${r.onboard.n < 4 ? "font-semibold text-ops-ink" : "text-ops-muted"}`}>{r.onboard.label}</span></span></td>
                 <td className={`px-4 py-3 ${r.users_7d === 0 ? "font-semibold text-red-700" : ""}`}>{ago(r.last_at)}</td>
                 <td className="px-4 py-3 text-right tabular-nums">{r.users_7d}</td>
                 <td className="px-4 py-3 text-right tabular-nums">{r.members}</td>

@@ -1,16 +1,18 @@
 import { controlDb, type D1Like, type WorkerEnv } from "@/lib/d1";
 import { usageSummary } from "@/lib/usage";
-import { rowCountsByProject } from "@/lib/tenant-db";
+import { rowCountsByTable, type TenantTable } from "@/lib/tenant-db";
+import { stageOf } from "@/lib/onboarding";
 import { shardBindings } from "@/lib/backup";
 import { STATE_LABEL, entitlementOf, type EntState } from "@/lib/entitlement";
 
 /** ข้อมูลระดับบัญชีของทุกโครงการ + สิทธิ์ใช้งาน + ขนาดข้อมูล (จำนวนแถว ไม่อ่านเนื้อหา) */
 export async function projectsOverview(env: WorkerEnv) {
   // อ่านพร้อมกันทั้งหมด (สรุปการใช้งาน + ขนาดข้อมูลทุกฐานข้อมูล)
-  const [rows, ...perShard] = await Promise.all([usageSummary(controlDb(env)), ...shardBindings(env).map((b) => rowCountsByProject(env[b] as D1Like))]);
-  const sizes: Record<string, number> = {};
-  for (const m of perShard) for (const [k, v] of Object.entries(m)) sizes[k] = (sizes[k] ?? 0) + v;
-  const list = rows.map((r) => ({ ...r, ent: entitlementOf(r), rows: sizes[r.id] ?? 0 }));
+  const [rows, ...perShard] = await Promise.all([usageSummary(controlDb(env)), ...shardBindings(env).map((b) => rowCountsByTable(env[b] as D1Like))]);
+  const byTable: Record<string, Partial<Record<TenantTable, number>>> = {};
+  for (const m of perShard) for (const [pid, t] of Object.entries(m)) byTable[pid] = { ...(byTable[pid] ?? {}), ...t };
+  const sizes: Record<string, number> = Object.fromEntries(Object.entries(byTable).map(([pid, t]) => [pid, Object.values(t).reduce((a, n) => a + (n ?? 0), 0)]));
+  const list = rows.map((r) => ({ ...r, ent: entitlementOf(r), rows: sizes[r.id] ?? 0, onboard: stageOf(r.kind, byTable[r.id] ?? {}, r.users_7d) }));
   const counts: Record<string, number> = { total: list.length, active7: list.filter((r) => r.users_7d > 0).length };
   for (const s of Object.keys(STATE_LABEL)) counts[s] = list.filter((r) => r.ent.state === s).length;
   counts.idle = counts.total - counts.active7;

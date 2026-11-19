@@ -17,5 +17,6 @@ echo "== calendar (ปฏิทิน)"; npx tsx tests/calendar.test.mts
 echo "== promotions (ราคาขายและโปรโมชั่น)"; npx tsx tests/promotions.test.mts
 echo "== audit (ตรวจเทียบแผน)"; npx tsx tests/audit.test.mts
 echo "== ops archive (ย้ายบันทึกระบบเก่า)"; npx tsx tests/ops-archive.test.mts
+echo "== improve (นำเข้า เบอร์ซ้ำ แจ้งเตือน เริ่มต้นใช้)"; npx tsx tests/improve.test.mts
 echo "== host / usage / backup"; npx tsx tests/host-usage-backup.test.mts
 echo "ทุกเทสต์ผ่าน"

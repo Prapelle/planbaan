@@ -32,7 +32,8 @@ async function saveAction(f: FormData) {
     if (fv(f, "contact")) await S.logContact(ctx.db, id, fv(f, "contact"), ctx.email);
   } catch (e) { back(`/leads/${id}`, { error: errMsg(e) }); }
   revalidatePath(`/leads/${id}`);
-  back(`/leads/${id}`, { msg: fv(f, "contact") ? "บันทึกข้อมูลและการติดต่อแล้ว" : "บันทึกข้อมูลแล้ว" });
+  const dup = fv(f, "phone") ? await S.findByPhone(ctx.db, fv(f, "phone"), id) : null;
+  back(`/leads/${id}`, { msg: (fv(f, "contact") ? "บันทึกข้อมูลและการติดต่อแล้ว" : "บันทึกข้อมูลแล้ว") + (dup ? ` · เบอร์นี้ซ้ำกับลูกค้า ${dup.name} ตรวจว่าเป็นคนเดียวกันหรือไม่` : "") });
 }
 
 async function stageAction(f: FormData) {
@@ -110,7 +111,10 @@ export default async function LeadPage({ params, searchParams }: { params: Promi
     <ProjectShell ctx={ctx} active="/leads">
       <Link href="/leads" className="mb-3 inline-flex min-h-11 items-center text-sm text-brand-700 underline">‹ กลับหน้าลูกค้า</Link>
       <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
-        <h1 className="text-2xl font-bold">{String(lead.name)}</h1>
+        <div className="flex flex-wrap items-center gap-3">
+          <h1 className="text-2xl font-bold">{String(lead.name)}</h1>
+          {!!lead.phone && <a href={`tel:${String(lead.phone)}`} className="flex min-h-11 items-center gap-1.5 rounded-full bg-emerald-600 px-4 text-sm font-semibold text-white hover:bg-emerald-700">โทร {String(lead.phone)}</a>}
+        </div>
         <span className="text-sm">ขั้น <b>{S.stageLabels(ctx.project.kind)[stage]}</b>{lead.plot_code ? <> · แปลง <Link href={`/plots?plot=${lead.plot_code}`} className="text-brand-700 underline">{String(lead.plot_code)}</Link></> : null}
           {stale && <span className="ml-2 font-semibold text-red-700">ค้าง {S.daysSince(String(lead.last_contact_at))} วัน</span>}
           {(stage === "booked" || stage === "loan") && ctx.project.kind !== "builder" && <Link href={`/loans?lead=${id}`} className="ml-3 font-semibold text-brand-700 underline">ดูสินเชื่อ</Link>}
@@ -159,45 +163,48 @@ export default async function LeadPage({ params, searchParams }: { params: Promi
       )}
 
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
-        <form action={saveAction} className="grid flex-1 grid-cols-1 gap-3 rounded-lg border border-slate-200 bg-white p-4 text-sm sm:grid-cols-2">
+        <form id="lead-main" action={saveAction} className="flex flex-1 flex-col gap-3 rounded-lg border border-slate-200 bg-white p-4 text-sm">
           <input type="hidden" name="id" value={id} />
           <fieldset disabled={!canEdit} className="contents">
-            <label className="flex flex-col gap-1">ชื่อ<input name="name" required defaultValue={String(lead.name)} className="min-h-11 rounded-md border border-slate-300 px-3" /></label>
-            <label className="flex flex-col gap-1">เบอร์โทร<input name="phone" inputMode="tel" defaultValue={String(lead.phone)} className="min-h-11 rounded-md border border-slate-300 px-3" /></label>
-            <label className="flex flex-col gap-1">ช่องทาง
-              <select name="channel" defaultValue={String(lead.channel)} className="min-h-11 rounded-md border border-slate-300 px-3">
-                {S.CHANNELS.map((c) => <option key={c} value={c}>{S.CHANNEL_LABEL[c]}</option>)}
-              </select>
-            </label>
-            <label className="flex flex-col gap-1">แปลง
-              <select name="plot_code" defaultValue={String(lead.plot_code)} className="min-h-11 rounded-md border border-slate-300 px-3">
-                <option value="">ยังไม่เลือก</option>
-                {plots.map((p) => <option key={p.id} value={String(p.code)}>{String(p.code)} · {S.SALE_LABEL[p.sale_status as S.SaleStatus]}</option>)}
-              </select>
-            </label>
-            {price && (
-              <label className="flex flex-col gap-1">ราคาขายจริง (บาท)
-                <input name="sale_price" inputMode="decimal" defaultValue={Number(lead.sale_price) > 0 ? String(lead.sale_price) : ""} placeholder={`ราคาตั้ง ${baht(price.summary.list)}`} className="min-h-11 rounded-md border border-slate-300 px-3" />
-                <span className="text-xs text-slate-600">เว้นว่าง = ขายตามราคาตั้ง</span>
-              </label>
-            )}
-            <label className="flex flex-col gap-1">ผู้ดูแล
-              <select name="owner_email" defaultValue={String(lead.owner_email)} className="min-h-11 rounded-md border border-slate-300 px-3">
-                {!members.some((m) => m.email === lead.owner_email) && <option value={String(lead.owner_email)}>{String(lead.owner_email) || "ไม่ระบุ"}</option>}
-                {members.map((m) => <option key={m.email} value={m.email}>{m.email}</option>)}
-              </select>
-            </label>
-            <label className="flex flex-col gap-1">นัดติดตามครั้งถัดไป<input name="next_follow_at" type="date" defaultValue={String(lead.next_follow_at)} className="min-h-11 rounded-md border border-slate-300 px-3" />
-              <Link href={`/calendar?lead=${id}#add`} className="text-xs font-medium text-brand-700 underline">เพิ่มนัดหมายพร้อมเวลาในปฏิทิน</Link></label>
-            <label className="flex flex-col gap-1 sm:col-span-2">หมายเหตุเกี่ยวกับลูกค้า<textarea name="note" rows={2} maxLength={1000} defaultValue={String(lead.note)} className="rounded-md border border-slate-300 p-3" /></label>
+            {/* ใช้บ่อยที่สุดขึ้นก่อน: บันทึกการติดต่อ + นัดครั้งถัดไป */}
             {canEdit && (
-              <label className="flex flex-col gap-1 rounded-md bg-brand-50 p-3 sm:col-span-2">
-                <span className="font-semibold text-brand-800">บันทึกการติดต่อครั้งนี้ (ถ้ามี)</span>
+              <label className="flex flex-col gap-1 rounded-md bg-brand-50 p-3">
+                <span className="font-semibold text-brand-800">บันทึกการติดต่อครั้งนี้</span>
                 <textarea name="contact" rows={2} maxLength={1000} placeholder="เช่น โทรแล้ว ลูกค้าขอดูแบบบ้านอีกครั้ง" className="rounded-md border border-slate-300 bg-white p-3" />
                 <span className="text-xs text-slate-600">ใส่ข้อความแล้วนับเป็นการติดต่อ ป้ายค้างติดตามจะหายไป</span>
               </label>
             )}
-            {canEdit && <button className="min-h-12 rounded-md bg-brand-600 px-4 text-base font-semibold text-white hover:bg-brand-700 sm:col-span-2">บันทึก</button>}
+            <label className="flex flex-col gap-1">นัดติดตามครั้งถัดไป<input name="next_follow_at" type="date" defaultValue={String(lead.next_follow_at)} className="min-h-11 rounded-md border border-slate-300 px-3" />
+              <Link href={`/calendar?lead=${id}#add`} className="text-xs font-medium text-brand-700 underline">เพิ่มนัดหมายพร้อมเวลาในปฏิทิน</Link></label>
+            <details className="group rounded-md border border-slate-200" open={!canEdit}>
+              <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-2 px-3 [&::-webkit-details-marker]:hidden">
+                <span><b>ข้อมูลลูกค้า</b> <span className="text-xs text-slate-600">{[String(lead.phone), S.CHANNEL_LABEL[lead.channel as S.Channel], lead.plot_code ? `แปลง ${lead.plot_code}` : "", `ดูแลโดย ${String(lead.owner_email).split("@")[0]}`].filter(Boolean).join(" · ")}</span></span>
+                <span aria-hidden="true" className="text-slate-500 group-open:rotate-180">▾</span>
+              </summary>
+              <div className="grid grid-cols-1 gap-3 border-t border-slate-200 p-3 sm:grid-cols-2">
+                <label className="flex flex-col gap-1">ชื่อ<input name="name" required defaultValue={String(lead.name)} className="min-h-11 rounded-md border border-slate-300 px-3" /></label>
+                <label className="flex flex-col gap-1">เบอร์โทร<input name="phone" inputMode="tel" defaultValue={String(lead.phone)} className="min-h-11 rounded-md border border-slate-300 px-3" /></label>
+                <label className="flex flex-col gap-1">ช่องทาง
+                  <select name="channel" defaultValue={String(lead.channel)} className="min-h-11 rounded-md border border-slate-300 px-3">
+                    {S.CHANNELS.map((c) => <option key={c} value={c}>{S.CHANNEL_LABEL[c]}</option>)}
+                  </select>
+                </label>
+                <label className="flex flex-col gap-1">แปลง
+                  <select name="plot_code" defaultValue={String(lead.plot_code)} className="min-h-11 rounded-md border border-slate-300 px-3">
+                    <option value="">ยังไม่เลือก</option>
+                    {plots.map((p) => <option key={p.id} value={String(p.code)}>{String(p.code)} · {S.SALE_LABEL[p.sale_status as S.SaleStatus]}</option>)}
+                  </select>
+                </label>
+                <label className="flex flex-col gap-1">ผู้ดูแล
+                  <select name="owner_email" defaultValue={String(lead.owner_email)} className="min-h-11 rounded-md border border-slate-300 px-3">
+                    {!members.some((m) => m.email === lead.owner_email) && <option value={String(lead.owner_email)}>{String(lead.owner_email) || "ไม่ระบุ"}</option>}
+                    {members.map((m) => <option key={m.email} value={m.email}>{m.email}</option>)}
+                  </select>
+                </label>
+                <label className="flex flex-col gap-1 sm:col-span-2">หมายเหตุเกี่ยวกับลูกค้า<textarea name="note" rows={2} maxLength={1000} defaultValue={String(lead.note)} className="rounded-md border border-slate-300 p-3" /></label>
+              </div>
+            </details>
+            {canEdit && <button className="min-h-12 rounded-md bg-brand-600 px-4 text-base font-semibold text-white hover:bg-brand-700">บันทึก</button>}
           </fieldset>
         </form>
 
@@ -239,6 +246,15 @@ function PriceBox({ id, p, chips, canEdit, canApprove, actorName }: {
     <section id="price" className="scroll-mt-4 rounded-lg border border-slate-200 bg-white p-4 text-sm">
       <h2 className="mb-1 font-semibold">ราคาและโปรโมชั่น</h2>
       <p className="mb-3 text-slate-700">ราคาตั้งของแปลง <b className="tabular-nums">{baht(s.list)}</b> บาท{s.list <= 0 && <span className="text-amber-700"> · แปลงนี้ยังไม่ใส่ราคา</span>}</p>
+      {/* ราคาขายจริงเป็นส่วนหนึ่งของฟอร์มหลัก (form="lead-main") ปุ่มนี้กับปุ่มบันทึกด้านบนคือการบันทึกเดียวกัน */}
+      {canEdit && (
+        <div className="mb-3 flex flex-wrap items-end gap-2">
+          <label className="flex flex-1 flex-col gap-1">ราคาขายจริง (บาท)
+            <input form="lead-main" name="sale_price" inputMode="decimal" defaultValue={Number(p.lead.sale_price) > 0 ? String(p.lead.sale_price) : ""} placeholder={`เว้นว่าง = ราคาตั้ง ${baht(s.list)}`} className="min-h-11 rounded-md border border-slate-300 px-3" />
+          </label>
+          <button form="lead-main" className="min-h-11 rounded-md border border-brand-600 px-4 font-semibold text-brand-700 hover:bg-brand-50">บันทึกราคา</button>
+        </div>
+      )}
 
       {p.promos.length > 0 && (
         <ul className="mb-3 flex flex-col gap-1">

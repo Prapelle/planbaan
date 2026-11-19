@@ -251,7 +251,7 @@ export default async function PlotsPage({ searchParams }: { searchParams: Promis
 
       {canEdit && !mapView && (
         <form action={bulkAction} className="mt-6 grid grid-cols-2 gap-3 rounded-lg border border-slate-200 bg-white p-4 text-sm sm:grid-cols-3 lg:grid-cols-6">
-          <div className="col-span-full font-semibold">เพิ่มแปลงทีละโซน</div>
+          <div className="col-span-full flex flex-wrap items-baseline justify-between gap-2 font-semibold">เพิ่มแปลงทีละโซน <Link href="/import?type=plots" className="text-sm font-medium text-brand-700 underline">มีรายการแปลงใน Excel อยู่แล้ว? นำเข้าจากไฟล์</Link></div>
           <label className="flex flex-col gap-1">โซน<input name="zone" required maxLength={4} placeholder="A" className="min-h-11 rounded-md border border-slate-300 px-3 uppercase" /></label>
           <label className="flex flex-col gap-1">จำนวนแปลง<input name="count" type="number" required min={1} max={300} defaultValue={12} className="min-h-11 rounded-md border border-slate-300 px-3" /></label>
           <label className="flex flex-col gap-1">เริ่มที่เลข<input name="start" type="number" min={1} defaultValue={1} className="min-h-11 rounded-md border border-slate-300 px-3" /></label>

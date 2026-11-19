@@ -4,6 +4,8 @@ import { cfg, type ProjectCtx } from "@/lib/context";
 import type { CountSpec } from "@/lib/tenant-db";
 import { STALE_DAYS as S_STALE_DAYS } from "@/lib/sales";
 import { SOURCE_LABEL } from "@/lib/entitlement";
+import { Bell } from "./Bell";
+import { PwaPing } from "./PwaPing";
 import { ROLE_LABEL, canExport, canGrantSupport, canManageMembers, canSeeCosts, canManagePromos } from "@/lib/roles";
 
 /** ไอคอนเส้น (ตกแต่ง ซ่อนจากโปรแกรมอ่านหน้าจอ) */
@@ -24,6 +26,7 @@ const ICON: Record<string, string> = {
   promo: "M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8zM7.5 7.5h.01",
   guide: "M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5zM4 20.5A2.5 2.5 0 0 0 6.5 23H20v-5M8 7h8M8 11h6",
   close: "M6 6l12 12M18 6L6 18",
+  search: "M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14M20 20l-4-4",
 };
 export function Icon({ name, size = 18 }: { name: string; size?: number }) {
   return (
@@ -132,21 +135,37 @@ export async function ProjectShell({ ctx, active, children }: { ctx: ProjectCtx;
       {ctx.access.via === "support" && (
         <div role="status" className="bg-ops-900 px-4 py-2 text-sm text-white">
           <span className="font-semibold text-ops-mint">ทีม PlanBaan</span> คุณเข้าโครงการนี้ในฐานะทีมช่วยเหลือ ({ctx.access.supportCanEdit ? "แก้ไขได้" : "ดูอย่างเดียว"}) สิทธิ์หมดอายุ{" "}
-          {new Date(ctx.access.grantExpiresAt ?? "").toLocaleString("th-TH")} · ทุกการเข้าถึงถูกบันทึกให้ลูกค้าเห็น
+          {new Date(ctx.access.grantExpiresAt ?? "").toLocaleString("th-TH", { timeZone: "Asia/Bangkok" })} · ทุกการเข้าถึงถูกบันทึกให้ลูกค้าเห็น
         </div>
       )}
       <EntBanner ctx={ctx} />
+      <PwaPing slug={ctx.project.slug} />
 
       {/* มือถือ: หัวหน้าเล็ก */}
-      <header className="flex items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-2.5 md:hidden">
+      <header className="relative flex items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-2.5 md:hidden">
         <div className="min-w-0">
           <div className="text-xs font-bold text-brand-600">PlanBaan แผนบ้าน</div>
           <div className="truncate text-base font-bold">{ctx.project.name}</div>
         </div>
-        {foreman && (
-          <div className="flex shrink-0 gap-2">
-            <Link href={active === "/guide" ? "/build" : "/guide"} className="flex min-h-10 items-center rounded-lg border border-slate-300 px-3 text-[13px] font-medium">{active === "/guide" ? "ก่อสร้าง" : "คู่มือ"}</Link>
-            <form action={logout}><button className="min-h-10 rounded-lg border border-slate-300 px-3 text-[13px] font-medium">ออกจากระบบ</button></form>
+        {foreman ? (
+          <div className="flex shrink-0 items-center gap-1">
+            <Bell active={active === "/notifications"} />
+            <Link href={active === "/calendar" ? "/build" : "/calendar"} className="flex min-h-10 items-center rounded-lg border border-slate-300 px-3 text-[13px] font-medium">{active === "/calendar" ? "ก่อสร้าง" : "ปฏิทิน"}</Link>
+            <details className="relative">
+              <summary className="flex min-h-10 cursor-pointer list-none items-center rounded-lg border border-slate-300 px-3 text-[13px] font-medium [&::-webkit-details-marker]:hidden">อื่น ๆ</summary>
+              <div className="absolute right-0 z-50 mt-1 flex w-40 flex-col gap-1 rounded-lg border border-slate-200 bg-white p-2 shadow-lg">
+                <Link href="/guide" className="flex min-h-10 items-center rounded-md px-2 text-sm hover:bg-slate-100">คู่มือ</Link>
+                <form action={logout}><button className="flex min-h-10 w-full items-center rounded-md px-2 text-sm hover:bg-slate-100">ออกจากระบบ</button></form>
+              </div>
+            </details>
+          </div>
+        ) : (
+          <div className="flex shrink-0 items-center gap-1">
+            <details className="group">
+              <summary aria-label="ค้นหาลูกค้า" className="flex h-11 w-11 cursor-pointer list-none items-center justify-center rounded-lg text-slate-700 hover:bg-slate-100 [&::-webkit-details-marker]:hidden"><Icon name="search" size={22} /></summary>
+              <div className="absolute inset-x-0 top-full z-50 border-b border-slate-200 bg-white px-4 py-3 shadow-md"><SearchBox autoFocus /></div>
+            </details>
+            <Bell active={active === "/notifications"} />
           </div>
         )}
       </header>
@@ -163,7 +182,13 @@ export async function ProjectShell({ ctx, active, children }: { ctx: ProjectCtx;
           <div className="mt-auto border-t border-slate-200 px-2 pt-4">{account}</div>
         </aside>
 
-        <main className={`min-w-0 flex-1 p-4 md:p-7 ${foreman ? "" : "pb-28 md:pb-7"}`}>{children}</main>
+        <main className={`min-w-0 flex-1 p-4 md:p-7 md:pt-4 ${foreman ? "" : "pb-28 md:pb-7"}`}>
+          <div className="mb-3 hidden items-center justify-end gap-2 md:flex">
+            {!foreman && <div className="w-80"><SearchBox /></div>}
+            <Bell active={active === "/notifications"} />
+          </div>
+          {children}
+        </main>
       </div>
 
       {/* มือถือ: แถบปุ่มล่าง + เมนูทั้งหมด */}
@@ -197,6 +222,16 @@ export async function ProjectShell({ ctx, active, children }: { ctx: ProjectCtx;
         </nav>
       )}
     </div>
+  );
+}
+
+/** ค้นหาลูกค้าจากทุกหน้า (ชื่อ เบอร์ หรือรหัสแปลง) → หน้าลูกค้า */
+function SearchBox({ autoFocus }: { autoFocus?: boolean }) {
+  return (
+    <form action="/leads" role="search" className="flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 focus-within:border-brand-500 focus-within:ring-2 focus-within:ring-brand-200">
+      <Icon name="search" />
+      <input name="q" type="search" required autoFocus={autoFocus} placeholder="ค้นหาลูกค้า ชื่อ เบอร์ หรือแปลง" aria-label="ค้นหาลูกค้า" className="min-h-10 w-full bg-transparent text-sm outline-none" />
+    </form>
   );
 }
 

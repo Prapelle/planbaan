@@ -1,5 +1,5 @@
 "use client";
-import { useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
 /**
@@ -21,6 +21,27 @@ async function shrink(file: File): Promise<Blob> {
   } catch { return file; }
 }
 
+// ── คิวรูปที่ส่งไม่ผ่าน (เน็ตหลุดหน้างาน): เก็บใน IndexedDB ของเครื่อง ส่งใหม่เองเมื่อมีสัญญาณ ──
+type Queued = { id?: number; build: string; stage: string; caption: string; blob: Blob; at: number };
+const DB = "planbaan-photos", STORE = "queue";
+function idb(): Promise<IDBDatabase> {
+  return new Promise((ok, fail) => {
+    const r = indexedDB.open(DB, 1);
+    r.onupgradeneeded = () => r.result.createObjectStore(STORE, { keyPath: "id", autoIncrement: true });
+    r.onsuccess = () => ok(r.result); r.onerror = () => fail(r.error);
+  });
+}
+async function tx<T>(mode: IDBTransactionMode, fn: (s: IDBObjectStore) => IDBRequest<T>): Promise<T> {
+  const db = await idb();
+  return new Promise((ok, fail) => { const r = fn(db.transaction(STORE, mode).objectStore(STORE)); r.onsuccess = () => ok(r.result); r.onerror = () => fail(r.error); });
+}
+const enqueue = (q: Queued) => tx("readwrite", (s) => s.add(q));
+const queued = () => tx<Queued[]>("readonly", (s) => s.getAll() as IDBRequest<Queued[]>).catch(() => [] as Queued[]);
+const dequeue = (id: number) => tx("readwrite", (s) => s.delete(id));
+/** ส่งไม่ถึงเซิร์ฟเวอร์ (ไม่ใช่เซิร์ฟเวอร์ตอบว่าผิด) */
+class Offline extends Error {}
+let flushing = false; // ทั้งหน้ามีคิวเดียว
+
 export function PhotoUpload({ action, buildId, stages, defaultStage }: {
   action: (f: FormData) => Promise<{ error?: string }>; buildId: string; stages: { id: string; name: string }[]; defaultStage?: string;
 }) {
@@ -29,24 +50,66 @@ export function PhotoUpload({ action, buildId, stages, defaultStage }: {
   const [status, setStatus] = useState("");
   const cap = useRef<HTMLInputElement>(null);
   const stage = useRef<HTMLSelectElement>(null);
+  const [waiting, setWaiting] = useState(0);
+
+  const send = useCallback(async (q: Queued): Promise<{ error?: string }> => {
+    const fd = new FormData();
+    fd.set("build", q.build); fd.set("stage", q.stage); fd.set("caption", q.caption);
+    fd.set("file", q.blob, "photo.jpg");
+    if (typeof navigator !== "undefined" && navigator.onLine === false) throw new Offline();
+    try { return (await action(fd)) ?? {}; } catch { throw new Offline(); }
+  }, [action]);
+
+  /** ส่งรูปที่ค้างในเครื่อง (ทุกหลัง) ทีละรูป หยุดเมื่อเน็ตยังไม่มา · ล็อกไว้ไม่ให้ส่งซ้อนกันจนรูปซ้ำ */
+  const flush = useCallback(async () => {
+    if (flushing) return;
+    flushing = true;
+    let sent = 0;
+    try {
+      for (const q of await queued()) {
+        try {
+          const r = await send(q);
+          await dequeue(q.id!); // เซิร์ฟเวอร์ตอบแล้ว (สำเร็จหรือรูปใช้ไม่ได้) ไม่ต้องเก็บต่อ
+          if (!r.error) sent++;
+        } catch { break; }
+      }
+      setWaiting((await queued()).length);
+    } finally { flushing = false; }
+    if (sent) { setStatus(`ส่งรูปที่ค้างไว้แล้ว ${sent} รูป`); router.refresh(); }
+  }, [send, router]);
+
+  // ส่งค้างตอนเปิดหน้าครั้งแรก และทุกครั้งที่เน็ตกลับมา (ผูกครั้งเดียว ใช้ flush ล่าสุดผ่าน ref)
+  const latest = useRef(flush);
+  latest.current = flush;
+  useEffect(() => {
+    if (typeof indexedDB === "undefined") return;
+    latest.current();
+    const on = () => { latest.current(); };
+    window.addEventListener("online", on);
+    return () => window.removeEventListener("online", on);
+  }, []);
 
   async function onFiles(files: FileList | null) {
     if (!files?.length) return;
     const list = [...files].slice(0, 10);
     start(async () => {
+      let sent = 0, kept = 0;
       for (let i = 0; i < list.length; i++) {
         setStatus(`กำลังส่งรูป ${i + 1}/${list.length}`);
-        const fd = new FormData();
-        fd.set("build", buildId);
-        fd.set("stage", stage.current?.value ?? "");
-        fd.set("caption", cap.current?.value ?? "");
-        fd.set("file", await shrink(list[i]), "photo.jpg");
-        let r: { error?: string } = {};
-        try { r = (await action(fd)) ?? {}; } catch { r = { error: "ส่งรูปไม่สำเร็จ ตรวจสัญญาณเน็ตแล้วลองใหม่" }; }
-        if (r.error) { setStatus(`รูปที่ ${i + 1}: ${r.error}`); router.refresh(); return; }
+        const q: Queued = { build: buildId, stage: stage.current?.value ?? "", caption: cap.current?.value ?? "", blob: await shrink(list[i]), at: Date.now() };
+        try {
+          const r = await send(q);
+          if (r.error) { setStatus(`รูปที่ ${i + 1}: ${r.error}`); router.refresh(); return; }
+          sent++;
+        } catch {
+          // เน็ตหลุด: เก็บไว้ในเครื่อง ส่งเองเมื่อมีสัญญาณ (ไม่ต้องถ่ายใหม่)
+          try { await enqueue(q); kept++; } catch { setStatus("ส่งรูปไม่สำเร็จ และเก็บรูปในเครื่องไม่ได้ ลองใหม่เมื่อมีสัญญาณ"); return; }
+        }
       }
-      setStatus(`ส่งรูปแล้ว ${list.length} รูป`);
-      router.refresh();
+      setWaiting((await queued()).length);
+      setStatus(kept ? `ส่งแล้ว ${sent} รูป · เก็บไว้ในเครื่อง ${kept} รูป จะส่งเองเมื่อมีสัญญาณ` : `ส่งรูปแล้ว ${sent} รูป`);
+      // รีเฟรชเฉพาะเมื่อส่งได้จริง: ตอนออฟไลน์ Next จะโหลดหน้าใหม่ทั้งหน้า แล้วเจอหน้าออฟไลน์ของเบราว์เซอร์
+      if (sent) router.refresh();
       if (cap.current) cap.current.value = "";
     });
   }
@@ -73,6 +136,12 @@ export function PhotoUpload({ action, buildId, stages, defaultStage }: {
         </label>
       </div>
       <p aria-live="polite" className="text-slate-700">{status}</p>
+      {waiting > 0 && (
+        <div role="status" className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-amber-50 px-3 py-2 text-amber-900">
+          <span>รอส่ง {waiting} รูป (เก็บไว้ในเครื่องนี้ ส่งเองเมื่อมีสัญญาณ อย่าล้างข้อมูลเบราว์เซอร์)</span>
+          <button type="button" onClick={() => start(flush)} disabled={pending} className="min-h-10 rounded-md border border-amber-700 px-3 font-semibold">ส่งตอนนี้</button>
+        </div>
+      )}
       <p className="text-xs text-slate-600">รูปที่ถ่ายยังไม่แสดงให้เจ้าของบ้านเห็นจนกว่าผู้จัดการกดเผยแพร่</p>
     </div>
   );
