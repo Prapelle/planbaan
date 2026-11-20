@@ -138,6 +138,19 @@ export async function recomputePlot(db: TenantDb, code: string) {
   if (next !== cur) await db.update("plots", String(plot.id), { sale_status: next });
 }
 
+/**
+ * กันจองแปลงซ้อน: การตรวจ "แปลงว่างไหม" กับการบันทึกเป็นคนละขั้น ถ้าสองคนจองแปลงเดียวกันพร้อมกันจะผ่านทั้งคู่
+ * หลังบันทึกจึงตรวจซ้ำ ถ้ามีผู้ถือแปลงรายอื่นอยู่ด้วย → ย้อนรายการนี้กลับแล้วแจ้งให้ลองใหม่ (ชนพร้อมกันจริงอาจย้อนทั้งคู่ ปลอดภัยกว่าถือแปลงซ้อน)
+ */
+async function settleClash(db: TenantDb, plot: string, id: string, undo: Record<string, unknown>, actor: string) {
+  if (!plot) return;
+  const holders = (await db.list("leads", { where: { plot_code: plot }, limit: 2000, columns: ["stage"] })).filter((l) => stageIdx(String(l.stage)) >= BOOKED_IDX);
+  if (!holders.some((l) => l.id !== id) || !holders.some((l) => l.id === id)) return;
+  await db.batch([{ kind: "update", table: "leads", id, patch: undo }, activityOp(id, "edit", actor, { note: `ยกเลิกอัตโนมัติ: แปลง ${plot} ถูกจองพร้อมกันโดยลูกค้ารายอื่น` })]);
+  await recomputePlot(db, plot);
+  throw new Error(`แปลง ${plot} เพิ่งถูกจองโดยลูกค้ารายอื่นพร้อมกัน ลองเลือกแปลงใหม่`);
+}
+
 // ── ลูกค้า ──
 /** เบอร์เดียวกันแม้เขียนต่างกัน (0812345678 = +66812345678 = 081-234-5678): เทียบ 9 หลักท้าย */
 export const phoneKey = (p: unknown) => { const d = String(p ?? "").replace(/\D/g, ""); return d.length >= 9 ? d.slice(-9) : ""; };
@@ -242,6 +255,10 @@ export async function updateLead(db: TenantDb, id: string, input: LeadInput, act
   }
   if (!Object.keys(patch).length) return;
   await db.batch(keep([{ kind: "update", table: "leads", id, patch }, activityOp(id, "edit", actor), ...ops]));
+  if (patch.plot_code !== undefined && stageIdx(stage) >= BOOKED_IDX) {
+    await settleClash(db, String(patch.plot_code), id, { plot_code: oldPlot }, actor);
+    if (oldPlot) await recomputePlot(db, oldPlot);
+  }
 }
 
 export async function moveLead(db: TenantDb, id: string, stageRaw: string, actor: string, opts: { requirePlot?: boolean; lostReason?: string; lostNote?: string; kind?: string } = {}) {
@@ -271,6 +288,7 @@ export async function moveLead(db: TenantDb, id: string, stageRaw: string, actor
     activityOp(id, "stage", actor, { from, to: stage, note: lostText }),
     plotUpdate(st, stage),
   ]));
+  if (stageIdx(stage) >= BOOKED_IDX && stageIdx(from) < BOOKED_IDX) await settleClash(db, plot, id, { stage: from, ...(from === "lost" ? { lost_reason: lead.lost_reason, lost_note: lead.lost_note } : {}) }, actor);
 }
 
 /** เลื่อนไปขั้นถัดไป/ก่อนหน้าในเส้นทางขาย */

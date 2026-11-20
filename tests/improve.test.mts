@@ -96,3 +96,15 @@ await test("รอบสี่: เบอร์ที่ Excel ตัด 0 ห�
   const n = mgr.find((x) => x.key === `approve-${l.id}`)!;
   assert.deepEqual([n.tone, n.title.startsWith("ส่วนลดเพิ่มหลังจอง")], ["amber", true]);
 });
+
+await test("รอบห้า: จองแปลงเดียวกันพร้อมกัน ต้องไม่มีผู้ถือแปลงซ้อน", async () => {
+  await importPlots(db, [{ code: "E01", price: "1000000" }]);
+  const a = await S.createLead(db, { name: "จองพร้อมกัน ก", plotCode: "E01" }, "s");
+  const b = await S.createLead(db, { name: "จองพร้อมกัน ข", plotCode: "E01" }, "t");
+  const res = await Promise.allSettled([S.moveLead(db, a.id, "booked", "s"), S.moveLead(db, b.id, "booked", "t")]);
+  const holders = (await db.list("leads", { where: { plot_code: "E01" } })).filter((l) => l.stage === "booked");
+  assert.ok(holders.length <= 1, `ผู้ถือแปลง ${holders.length} ราย`);
+  assert.ok(res.some((r) => r.status === "rejected"));
+  const plot = (await S.getPlotByCode(db, "E01"))!;
+  assert.equal(plot.sale_status, holders.length ? "booked" : "available");
+});
