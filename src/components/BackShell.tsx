@@ -11,6 +11,8 @@ import { Icon } from "./ProjectShell";
  */
 export type BackActive = "overview" | "projects" | "expiring" | "staff";
 
+import { SubmitGuard } from "./SubmitGuard";
+
 export async function BackShell({ env, email, staffRole, active, children, alerts: known }: {
   env: WorkerEnv; email: string; staffRole: string; active: BackActive; children: React.ReactNode;
   /** หน้าที่คำนวณสิทธิ์ของทุกโครงการอยู่แล้วส่งมาเลย ไม่ต้องอ่านฐานข้อมูลซ้ำ */
@@ -29,6 +31,7 @@ export async function BackShell({ env, email, staffRole, active, children, alert
 
   return (
     <div className="flex min-h-screen flex-col bg-ops-bg text-ops-ink md:flex-row">
+      <SubmitGuard />
       <aside className="flex shrink-0 flex-col gap-5 bg-ops-900 px-3 py-4 text-ops-200 md:min-h-screen md:w-60 md:py-5">
         <div className="flex flex-wrap items-center justify-between gap-2 px-2">
           <div className="flex flex-col gap-1">

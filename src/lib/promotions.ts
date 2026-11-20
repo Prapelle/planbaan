@@ -56,8 +56,10 @@ export async function setApprovePct(db: TenantDb, raw: string) {
 export async function catalog(db: TenantDb) {
   let rows = await db.list("promotions", { limit: 500, orderBy: "created_at" });
   if (!rows.length && !(await getSetting(db, "promos_seeded"))) {
-    await db.batch(DEFAULT_PROMOS.map((p): BatchOp => ({ kind: "insert", table: "promotions", data: { ...p, valid_until: "", active: 1 } })));
-    await putSetting(db, "promos_seeded", "1");
+    // จองสิทธิ์เติมก่อน (คีย์ซ้ำไม่ได้) เปิดหน้าพร้อมกันสองคนจะเติมชุดเริ่มต้นแค่ครั้งเดียว
+    let claimed = true;
+    try { await db.insert("project_settings", { key: "promos_seeded", value: "1" }); } catch { claimed = false; }
+    if (claimed) await db.batch(DEFAULT_PROMOS.map((p): BatchOp => ({ kind: "insert", table: "promotions", data: { ...p, valid_until: "", active: 1 } })));
     rows = await db.list("promotions", { limit: 500, orderBy: "created_at" });
   }
   return rows;

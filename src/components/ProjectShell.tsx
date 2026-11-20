@@ -6,6 +6,7 @@ import { STALE_DAYS as S_STALE_DAYS } from "@/lib/sales";
 import { SOURCE_LABEL } from "@/lib/entitlement";
 import { Bell } from "./Bell";
 import { PwaPing } from "./PwaPing";
+import { SubmitGuard } from "./SubmitGuard";
 import { ROLE_LABEL, canExport, canGrantSupport, canManageMembers, canSeeCosts, canManagePromos } from "@/lib/roles";
 
 /** ไอคอนเส้น (ตกแต่ง ซ่อนจากโปรแกรมอ่านหน้าจอ) */
@@ -140,6 +141,7 @@ export async function ProjectShell({ ctx, active, children }: { ctx: ProjectCtx;
       )}
       <EntBanner ctx={ctx} />
       <PwaPing slug={ctx.project.slug} />
+      <SubmitGuard />
 
       {/* มือถือ: หัวหน้าเล็ก */}
       <header className="relative flex items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-2.5 md:hidden">

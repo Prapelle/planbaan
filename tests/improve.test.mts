@@ -108,3 +108,10 @@ await test("รอบห้า: จองแปลงเดียวกันพ
   const plot = (await S.getPlotByCode(db, "E01"))!;
   assert.equal(plot.sale_status, holders.length ? "booked" : "available");
 });
+
+await test("รอบหก: เปิดหน้าโปรโมชั่นพร้อมกันครั้งแรก ชุดเริ่มต้นไม่ซ้ำ", async () => {
+  const q = await createProject(raw as never, { slug: "seedrace", name: "ทดสอบ", ownerEmail: "z@x.com" });
+  const qdb = tenantDb(raw as never, q.id);
+  await Promise.all([P.catalog(qdb), P.catalog(qdb), P.catalog(qdb)]);
+  assert.equal((await qdb.list("promotions")).length, 4);
+});
