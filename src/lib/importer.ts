@@ -12,6 +12,12 @@ export const MAX_ROWS = 2000;
 type Raw = Record<string, string>;
 export type ImportReport = { added: number; updated: number; skipped: { row: number; reason: string }[]; notes: { row: number; reason: string }[] };
 
+/** เบอร์ไทยที่ Excel ตัดเลข 0 หน้าออก (เก็บเป็นตัวเลข): มือถือ 9 หลักขึ้นต้น 6/8/9, เบอร์บ้าน 8 หลักขึ้นต้น 2–7 → เติม 0 */
+export const fixThaiPhone = (raw: unknown) => {
+  const p = String(raw ?? "").replace(/[^\d+]/g, "").slice(0, 20);
+  if (/^[689]\d{8}$/.test(p) || /^[2-7]\d{7}$/.test(p)) return `0${p}`;
+  return p;
+};
 const t = (v: unknown, max = 200) => String(v ?? "").replace(/[\u0000-\u001f]/g, " ").trim().slice(0, max);
 const num = (v: unknown) => {
   const s = String(v ?? "").replace(/[,\s฿]|บาท|ตร\.?ว\.?/g, "");
@@ -95,7 +101,7 @@ export async function importLeads(db: TenantDb, rows: Raw[], actor: string, memb
     const row = i + 2;
     const name = t(r.name, 120);
     if (!name) return rep.skipped.push({ row, reason: "ไม่มีชื่อลูกค้า" });
-    const phone = String(r.phone ?? "").replace(/[^\d+]/g, "").slice(0, 20);
+    const phone = fixThaiPhone(r.phone);
     const k = S.phoneKey(phone);
     if (k && phones.has(k)) return rep.skipped.push({ row, reason: `เบอร์ ${phone} มีอยู่แล้ว (${name})` });
     if (k) phones.add(k);

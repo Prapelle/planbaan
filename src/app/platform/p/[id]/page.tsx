@@ -59,6 +59,7 @@ const EVENT_LABEL: Record<string, string> = {
   page_view: "เปิดหน้า", login: "เข้าสู่ระบบ", lead_created: "เพิ่มลูกค้า", lead_stage_changed: "เปลี่ยนขั้นลูกค้า", plot_created: "เพิ่มแปลง", plot_updated: "แก้แปลง",
   member_added: "เพิ่มผู้ใช้", member_removed: "ลบผู้ใช้", support_granted: "เปิดสิทธิ์ทีมช่วยเหลือ", support_revoked: "ปิดสิทธิ์ทีมช่วยเหลือ",
   export: "ส่งออกข้อมูล", marketing_import: "นำเข้าไฟล์โฆษณา", marketing_updated: "แก้ข้อมูลการตลาด",
+  import: "นำเข้าจาก Excel", pwa_opened: "เปิดจากแอปบนมือถือ",
 };
 const input = "min-h-11 rounded-lg border border-ops-line px-3";
 const lastMonths = (n: number) => {

@@ -84,3 +84,15 @@ await test("รอบสาม: นำเข้าของรับสร้า
   const fm = await notifications(db, { kind: "developer", construction: true, staleDays: 7, role: "foreman", email: "other@x.com" });
   assert.ok(fm.some((n) => n.key === `late-${nb.id}`));
 });
+
+await test("รอบสี่: เบอร์ที่ Excel ตัด 0 หน้า เติมกลับ / ส่วนลดเพิ่มหลังจองขึ้นแจ้งเตือน", async () => {
+  const { fixThaiPhone } = await import("../src/lib/importer");
+  assert.deepEqual(["812345678", "21234567", "0812345678", "+66812345678", "12345"].map(fixThaiPhone), ["0812345678", "021234567", "0812345678", "+66812345678", "12345"]);
+  await importPlots(db, [{ code: "D01", price: "1000000" }]);
+  const l = await S.createLead(db, { name: "จองแล้วลดเพิ่ม", plotCode: "D01" }, "s");
+  await S.moveLead(db, l.id, "booked", "s");
+  await P.addLeadPromo(db, l.id, { name: "แถม", kind: "gift", value: "50000" }, "s");
+  const mgr = await notifications(db, { kind: "developer", construction: false, staleDays: 7, role: "manager", email: "m@x.com" });
+  const n = mgr.find((x) => x.key === `approve-${l.id}`)!;
+  assert.deepEqual([n.tone, n.title.startsWith("ส่วนลดเพิ่มหลังจอง")], ["amber", true]);
+});

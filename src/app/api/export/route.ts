@@ -8,7 +8,8 @@ export const dynamic = "force-dynamic";
 /** ช่องที่ขึ้นต้นด้วย = + - @ ใส่ ' นำหน้า กันสูตรทำงานเองตอนเปิดใน Excel */
 const cell = (v: unknown) => {
   let s = v === null || v === undefined ? "" : String(v);
-  if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`;
+  // กันสูตรใน Excel (=, +, -, @) แต่ตัวเลขติดลบ เช่น งานลด -50000 ยังเป็นตัวเลข
+  if (typeof v !== "number" && /^[=+\-@\t\r]/.test(s) && !/^-?\d+(\.\d+)?$/.test(s)) s = `'${s}`;
   return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 };
 

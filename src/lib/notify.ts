@@ -56,11 +56,13 @@ export async function notifications(db: TenantDb, me: {
   if (boss && developer) {
     const price = new Map(plots.map((p) => [String(p.code), Number(p.price)]));
     for (const l of leads) {
-      if (!l.plot_code || S.stageIdx(String(l.stage)) >= S.stageIdx("booked") || l.stage === "lost") continue;
+      if (!l.plot_code || S.isClosed(String(l.stage))) continue;
+      const afterBooking = S.stageIdx(String(l.stage)) >= S.stageIdx("booked");
       const mine = promos.filter((x) => x.lead_id === l.id);
       if (!mine.length && !(Number(l.sale_price) > 0)) continue;
       const s = P.summarize(l, price.get(String(l.plot_code)) ?? 0, mine, threshold);
-      if (s.needsApproval) out.push({ key: `approve-${l.id}`, group: "รออนุมัติ", tone: "red", title: `ส่วนลด ${s.pct.toFixed(1)}% รออนุมัติ: ${l.name}`, sub: `แปลง ${l.plot_code} · ลด ${s.totalDiscount.toLocaleString("th-TH")} บาท`, href: `/leads/${l.id}#price` });
+      // ก่อนจอง: ฝ่ายขายเลื่อนไปจองไม่ได้จนกว่าจะอนุมัติ · หลังจอง: ไม่บังคับ แต่แจ้งให้ผู้จัดการรู้ว่ามีส่วนลดเพิ่ม
+      if (s.needsApproval) out.push({ key: `approve-${l.id}`, group: "รออนุมัติ", tone: afterBooking ? "amber" : "red", title: `${afterBooking ? "ส่วนลดเพิ่มหลังจอง" : "ส่วนลดรออนุมัติ"} ${s.pct.toFixed(1)}%: ${l.name}`, sub: `แปลง ${l.plot_code} · ลด ${s.totalDiscount.toLocaleString("th-TH")} บาท`, href: `/leads/${l.id}#price` });
     }
     // ── สินเชื่อ ──
     for (const l of leads) {
